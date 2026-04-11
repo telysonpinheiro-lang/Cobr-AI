@@ -13,7 +13,16 @@ const STATUS_OPTS = [
 ];
 
 function brl(v) {
-  return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
+}
+
+function formatPhone(p) {
+  const s = String(p || '').replace(/\D/g, '');
+  const m = s.match(/^55(\d{2})(\d{4,5})(\d{4})$/) || s.match(/^(\d{2})(\d{4,5})(\d{4})$/);
+  if (!m) return p || '';
+  return s.startsWith('55')
+    ? `(${m[1]}) ${m[2]}-${m[3]}`
+    : `(${m[1]}) ${m[2]}-${m[3]}`;
 }
 
 export default function Debtors() {
@@ -63,7 +72,7 @@ export default function Debtors() {
             {list.map((d) => (
               <tr key={d.id}>
                 <td>{d.name}</td>
-                <td>{d.phone}</td>
+                <td>{formatPhone(d.phone)}</td>
                 <td>{brl(d.amount)}</td>
                 <td>{d.due_date}</td>
                 <td><span className={`badge ${d.status}`}>{d.status.replace(/_/g, ' ')}</span></td>

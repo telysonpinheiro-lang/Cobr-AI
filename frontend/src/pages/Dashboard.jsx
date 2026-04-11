@@ -12,7 +12,7 @@ const STATUS_LABEL = {
 };
 
 function brl(v) {
-  return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
 }
 
 export default function Dashboard() {

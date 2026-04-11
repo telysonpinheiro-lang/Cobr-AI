@@ -27,8 +27,11 @@ export default function Login() {
   return (
     <div className="login">
       <form className="panel" onSubmit={submit}>
-        <h1>Cobr-AI</h1>
-        <p>Recuperação automática de inadimplência</p>
+        <h1 style={{ marginBottom: 2 }}>Cobr-AI</h1>
+        <p style={{ margin: '0 0 4px', fontSize: 11, color: 'var(--muted)', letterSpacing: 0.5 }}>
+          by VIRTUAL CORE
+        </p>
+        <p style={{ marginTop: 12 }}>Recuperação automática de inadimplência</p>
         {error && <div className="error">{error}</div>}
         <div className="field">
           <label>E-mail</label>

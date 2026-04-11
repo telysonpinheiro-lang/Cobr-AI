@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(taskkill /PID 27140 /F)",
+      "Bash(cmd //c \"taskkill /PID 27140 /F\")",
+      "Bash(sshpass -p 'Gg9oa3015V' ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@185.194.217.100 \"echo '=== OS ===' && cat /etc/os-release && echo '=== Node ===' && node -v 2>/dev/null || echo 'Node nao instalado' && echo '=== Nginx ===' && nginx -v 2>/dev/null || echo 'Nginx nao instalado' && echo '=== Apache ===' && httpd -v 2>/dev/null || echo 'Apache nao instalado' && echo '=== PM2 ===' && pm2 -v 2>/dev/null || echo 'PM2 nao instalado' && echo '=== Portas ===' && ss -tlnp && echo '=== /var/www ===' && ls /var/www/ 2>/dev/null && echo '=== /home ===' && ls /home/ 2>/dev/null\")",
+      "Bash(python -c \"import paramiko; print\\('paramiko ok'\\)\")",
+      "Bash(ssh-keygen -t ed25519 -f /tmp/cobrai_temp_key -N \"\" -C \"cobrai-deploy-temp\")",
+      "Read(//tmp/**)",
+      "Bash(scp -o StrictHostKeyChecking=no -i /tmp/cobrai_temp_key -r d:/Aplication/claude/Cobr-ai/backend/src d:/Aplication/claude/Cobr-ai/backend/package.json d:/Aplication/claude/Cobr-ai/backend/package-lock.json root@185.194.217.100:/var/www/cobrai/backend/)",
+      "Bash(scp -o StrictHostKeyChecking=no -i /tmp/cobrai_temp_key d:/Aplication/claude/Cobr-ai/backend/db/schema.sql root@185.194.217.100:/var/www/cobrai/)",
+      "Bash(wait)",
+      "Bash(scp -o StrictHostKeyChecking=no -i /tmp/cobrai_temp_key -r d:/Aplication/claude/Cobr-ai/frontend/src d:/Aplication/claude/Cobr-ai/frontend/index.html d:/Aplication/claude/Cobr-ai/frontend/package.json d:/Aplication/claude/Cobr-ai/frontend/package-lock.json d:/Aplication/claude/Cobr-ai/frontend/vite.config.js root@185.194.217.100:/var/www/cobrai/frontend/)"
+    ]
+  }
+}

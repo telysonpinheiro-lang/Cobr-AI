@@ -13,7 +13,12 @@ export default function Layout() {
   return (
     <div className="app">
       <aside className="sidebar">
-        <h1>Cobr-AI</h1>
+        <div style={{ paddingLeft: 12, marginBottom: 8 }}>
+          <h1 style={{ margin: 0, lineHeight: 1.1 }}>Cobr-AI</h1>
+          <span style={{ fontSize: 10, color: 'var(--muted)', letterSpacing: 0.5 }}>
+            by VIRTUAL CORE
+          </span>
+        </div>
         <nav>
           <NavLink to="/" end>📊 Dashboard</NavLink>
           <NavLink to="/clients">👥 Clientes</NavLink>

@@ -3,7 +3,16 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../api.js';
 
 function brl(v) {
-  return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
+}
+
+function formatPhone(p) {
+  const s = String(p || '').replace(/\D/g, '');
+  const m = s.match(/^55(\d{2})(\d{4,5})(\d{4})$/) || s.match(/^(\d{2})(\d{4,5})(\d{4})$/);
+  if (!m) return p || '';
+  return s.startsWith('55')
+    ? `(${m[1]}) ${m[2]}-${m[3]}`
+    : `(${m[1]}) ${m[2]}-${m[3]}`;
 }
 
 export default function DebtorDetail() {
@@ -48,7 +57,7 @@ export default function DebtorDetail() {
       <div className="cards">
         <div className="card">
           <div className="label">Telefone</div>
-          <div className="value" style={{ fontSize: 18 }}>{debtor.phone}</div>
+          <div className="value" style={{ fontSize: 18 }}>{formatPhone(debtor.phone)}</div>
         </div>
         <div className="card warning">
           <div className="label">Valor</div>

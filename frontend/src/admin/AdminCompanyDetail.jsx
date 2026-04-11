@@ -8,7 +8,7 @@ const WA_PROVIDERS  = ['mock', 'zapi', 'evolution'];
 const PAY_PROVIDERS = ['mock', 'asaas', 'pagarme'];
 
 function brl(v) {
-  return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
 }
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
