@@ -10,6 +10,23 @@ const EMPTY_FORM = {
   installments: 1,
 };
 
+function maskPhone(v) {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 2)  return d.length ? `(${d}` : '';
+  if (d.length <= 6)  return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+}
+
+function maskAmount(v) {
+  const d = v.replace(/\D/g, '');
+  if (!d) return '';
+  const num = (parseInt(d, 10) / 100).toFixed(2);
+  const [int, dec] = num.split('.');
+  const intFmt = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${intFmt},${dec}`;
+}
+
 export default function Upload() {
   const [tab, setTab] = useState('manual'); // 'manual' | 'file'
   const navigate = useNavigate();
@@ -179,7 +196,7 @@ export default function Upload() {
                 <input
                   type="tel"
                   value={form.phone}
-                  onChange={(e) => update('phone', e.target.value)}
+                  onChange={(e) => update('phone', maskPhone(e.target.value))}
                   placeholder="(11) 91234-5678"
                   required
                 />
@@ -188,9 +205,10 @@ export default function Upload() {
                 <label>Valor da dívida (R$) *</label>
                 <input
                   type="text"
+                  inputMode="numeric"
                   value={form.amount}
-                  onChange={(e) => update('amount', e.target.value)}
-                  placeholder="250,00"
+                  onChange={(e) => update('amount', maskAmount(e.target.value))}
+                  placeholder="0,00"
                   required
                 />
               </div>
