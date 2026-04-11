@@ -36,6 +36,14 @@ async function runMigrations() {
     await ensureColumn('companies', 'revenue_share',
       `revenue_share DECIMAL(5,2) DEFAULT 0 COMMENT '% sobre valor recuperado'`);
 
+    // Credenciais Evolution API por empresa
+    await ensureColumn('companies', 'evolution_base_url',
+      `evolution_base_url VARCHAR(255) DEFAULT NULL`);
+    await ensureColumn('companies', 'evolution_api_key',
+      `evolution_api_key TEXT DEFAULT NULL`);
+    await ensureColumn('companies', 'evolution_instance',
+      `evolution_instance VARCHAR(100) DEFAULT NULL`);
+
     // Super admin (vê todas as empresas)
     await ensureColumn('users', 'is_super_admin',
       `is_super_admin TINYINT(1) DEFAULT 0`);

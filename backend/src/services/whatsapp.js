@@ -37,21 +37,31 @@ const zapi = {
 };
 
 const evolution = {
-  async send({ to, body }) {
-    const baseUrl = process.env.EVOLUTION_BASE_URL;
-    const apiKey = process.env.EVOLUTION_API_KEY;
-    const instance = process.env.EVOLUTION_INSTANCE;
-    if (!baseUrl || !apiKey || !instance) throw new Error('Evolution API não configurado');
-    // Exemplo:
-    // const r = await fetch(`${baseUrl}/message/sendText/${instance}`, {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json', apikey: apiKey },
-    //   body: JSON.stringify({ number: to, text: body }),
-    // });
-    // const data = await r.json();
-    // return { providerId: data.key?.id };
-    console.log(`[whatsapp:evolution] -> ${to}: ${body}`);
-    return { providerId: 'evo-' + Date.now() };
+  async send({ to, body, companyConfig }) {
+    const baseUrl = (
+      companyConfig?.whatsapp?.evolutionBaseUrl || process.env.EVOLUTION_BASE_URL || ''
+    ).replace(/\/$/, '');
+    const apiKey   = companyConfig?.whatsapp?.evolutionApiKey  || process.env.EVOLUTION_API_KEY   || '';
+    const instance = companyConfig?.whatsapp?.evolutionInstance|| process.env.EVOLUTION_INSTANCE  || '';
+
+    if (!baseUrl || !apiKey || !instance) {
+      throw new Error('Evolution API não configurado (base_url, api_key e instance são obrigatórios)');
+    }
+
+    const r = await fetch(`${baseUrl}/message/sendText/${instance}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: apiKey },
+      body: JSON.stringify({ number: to, text: body }),
+    });
+
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error(`Evolution API erro ${r.status}: ${txt}`);
+    }
+
+    const data = await r.json();
+    console.log(`[whatsapp:evolution] -> ${to}: enviado (id=${data.key?.id})`);
+    return { providerId: data.key?.id || ('evo-' + Date.now()) };
   },
 };
 
@@ -60,7 +70,7 @@ const providers = { mock, zapi, evolution };
 async function sendMessage({ to, body, companyConfig }) {
   const provider = (companyConfig?.whatsapp?.provider || DEFAULT_PROVIDER).toLowerCase();
   const impl = providers[provider] || mock;
-  return impl.send({ to, body });
+  return impl.send({ to, body, companyConfig });
 }
 
 module.exports = { sendMessage, DEFAULT_PROVIDER };

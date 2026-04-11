@@ -77,7 +77,8 @@ export const api = {
   client:       (phone)           => request(`/api/clients/${encodeURIComponent(phone)}`),
   renameClient: (phone, name)     => request(`/api/clients/${encodeURIComponent(phone)}`, { method: 'PATCH', body: { name } }),
   deleteClient: (phone)           => request(`/api/clients/${encodeURIComponent(phone)}`, { method: 'DELETE' }),
-  getSettings:  ()                => request('/api/settings'),
-  saveSettings: (data)            => request('/api/settings', { method: 'PUT', body: data }),
-  runScheduler: ()                => request('/api/scheduler/run', { method: 'POST' }),
+  getSettings:   ()               => request('/api/settings'),
+  saveSettings:  (data)           => request('/api/settings', { method: 'PUT', body: data }),
+  testEvolution: (data)           => request('/api/settings/test-evolution', { method: 'POST', body: data }),
+  runScheduler:  ()               => request('/api/scheduler/run', { method: 'POST' }),
 };

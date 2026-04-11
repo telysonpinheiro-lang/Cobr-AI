@@ -18,7 +18,10 @@ async function getCompanyConfig(companyId) {
     plan: c.plan,
     status: c.status,
     whatsapp: {
-      provider: c.whatsapp_provider || process.env.WHATSAPP_PROVIDER || 'mock',
+      provider:         c.whatsapp_provider    || process.env.WHATSAPP_PROVIDER    || 'mock',
+      evolutionBaseUrl: c.evolution_base_url   || process.env.EVOLUTION_BASE_URL   || '',
+      evolutionApiKey:  c.evolution_api_key    || process.env.EVOLUTION_API_KEY    || '',
+      evolutionInstance:c.evolution_instance   || process.env.EVOLUTION_INSTANCE   || '',
     },
     payment: {
       provider: c.payment_provider || process.env.PAYMENT_PROVIDER || 'mock',

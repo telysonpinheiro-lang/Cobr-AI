@@ -1,6 +1,8 @@
 // Webhook que recebe mensagens do provedor de WhatsApp e dispara a IA.
-// Formato esperado (normalize aqui o payload do seu provedor):
-//   POST /api/webhook/whatsapp { phone: "5511...", body: "texto" }
+//
+// Evolution API — configure na instância:
+//   URL: POST http://SEU-BACKEND:4000/api/webhook/whatsapp
+//   Eventos: messages.upsert
 
 const express = require('express');
 const pool = require('../config/db');
@@ -11,16 +13,69 @@ const { getCompanyConfig } = require('../services/companyConfig');
 
 const router = express.Router();
 
+// Normaliza payloads de diferentes provedores para { phone, body, instance }
+function parseWebhookPayload(raw) {
+  // Evolution API — evento messages.upsert
+  if (raw.event === 'messages.upsert' || raw.data?.key?.remoteJid) {
+    const data = raw.data || {};
+    // ignora mensagens enviadas pelo próprio bot
+    if (data.key?.fromMe) return null;
+    // ignora grupos (@g.us)
+    if (String(data.key?.remoteJid || '').includes('@g.us')) return null;
+
+    const phone = String(data.key?.remoteJid || '').replace(/@.*/, '').replace(/\D/g, '');
+    const msg   = data.message || {};
+    const body  =
+      msg.conversation ||
+      msg.extendedTextMessage?.text ||
+      msg.imageMessage?.caption ||
+      msg.videoMessage?.caption ||
+      '';
+
+    if (!phone || !body) return null;
+    return { phone, body, instance: raw.instance || null };
+  }
+
+  // Z-API / genérico
+  const phone = String(raw.phone || raw.from || '').replace(/\D/g, '');
+  const body  = raw.body || raw.text || raw.message || '';
+  if (!phone || !body) return null;
+  return { phone, body, instance: null };
+}
+
+// Encontra o devedor e sua empresa pelo telefone.
+// Se a instância for informada, restringe à empresa dona da instância.
+async function findDebtor(phone, instance) {
+  if (instance) {
+    // busca empresa pela instância e depois o devedor dentro dela
+    const [[company]] = await pool.query(
+      `SELECT id FROM companies WHERE evolution_instance = ? AND COALESCE(status,'active') = 'active'`,
+      [instance]
+    );
+    if (company) {
+      const [[debtor]] = await pool.query(
+        'SELECT * FROM debtors WHERE phone = ? AND company_id = ? LIMIT 1',
+        [phone, company.id]
+      );
+      if (debtor) return debtor;
+    }
+  }
+  // fallback: procura em todas as empresas (compatível com Z-API / single-tenant)
+  const [[debtor]] = await pool.query(
+    'SELECT * FROM debtors WHERE phone = ? LIMIT 1',
+    [phone]
+  );
+  return debtor || null;
+}
+
 router.post('/whatsapp', async (req, res) => {
   try {
-    // Adapte o parser conforme seu provedor (Z-API, Evolution, etc.)
-    const phone = String(req.body.phone || req.body.from || '').replace(/\D/g, '');
-    const body = req.body.body || req.body.text || req.body.message || '';
-    if (!phone || !body) return res.status(400).json({ error: 'payload inválido' });
+    const parsed = parseWebhookPayload(req.body);
+    if (!parsed) return res.json({ ok: true, ignored: true });
 
-    const [[debtor]] = await pool.query(
-      'SELECT * FROM debtors WHERE phone = ? LIMIT 1', [phone]
-    );
+    const { phone, body, instance } = parsed;
+    const debtor = await findDebtor(phone, instance);
+
     if (!debtor) {
       console.warn('[webhook] devedor não encontrado para', phone);
       return res.json({ ok: true, ignored: true });
@@ -48,11 +103,10 @@ router.post('/whatsapp', async (req, res) => {
 
     // Se a IA fechou um acordo, persiste e gera link de pagamento
     if (deal && deal.final_amount) {
-      const discount = Number(deal.discount_pct || 0);
-      const installments = Number(deal.installments || 1);
-      const finalAmount = Number(deal.final_amount);
+      const discount     = Number(deal.discount_pct  || 0);
+      const installments = Number(deal.installments  || 1);
+      const finalAmount  = Number(deal.final_amount);
 
-      // valida limites
       if (discount <= Number(settings.max_discount) &&
           installments <= Number(settings.max_installments)) {
         const [d] = await pool.query(

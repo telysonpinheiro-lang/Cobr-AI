@@ -77,7 +77,8 @@ router.post('/companies', async (req, res) => {
   const {
     name, plan = 'free', monthly_price = 0,
     owner_name, owner_email, owner_password,
-    whatsapp_provider, payment_provider, openai_api_key, openai_model,
+    whatsapp_provider, evolution_base_url, evolution_api_key, evolution_instance,
+    payment_provider, openai_api_key, openai_model,
   } = req.body || {};
 
   if (!name || !owner_name || !owner_email || !owner_password) {
@@ -89,10 +90,13 @@ router.post('/companies', async (req, res) => {
     await conn.beginTransaction();
     const [c] = await conn.query(
       `INSERT INTO companies (name, plan, monthly_price, status,
-         whatsapp_provider, payment_provider, openai_api_key, openai_model)
-       VALUES (?, ?, ?, 'active', ?, ?, ?, ?)`,
+         whatsapp_provider, evolution_base_url, evolution_api_key, evolution_instance,
+         payment_provider, openai_api_key, openai_model)
+       VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)`,
       [name, plan, monthly_price,
-       whatsapp_provider || null, payment_provider || null,
+       whatsapp_provider || null,
+       evolution_base_url || null, evolution_api_key || null, evolution_instance || null,
+       payment_provider || null,
        openai_api_key || null, openai_model || null]
     );
     await conn.query('INSERT INTO settings (company_id) VALUES (?)', [c.insertId]);
@@ -135,7 +139,8 @@ router.get('/companies/:id', async (req, res) => {
 router.put('/companies/:id', async (req, res) => {
   const allowed = [
     'name', 'plan', 'monthly_price', 'revenue_share', 'status',
-    'whatsapp_provider', 'payment_provider', 'openai_api_key', 'openai_model',
+    'whatsapp_provider', 'evolution_base_url', 'evolution_api_key', 'evolution_instance',
+    'payment_provider', 'openai_api_key', 'openai_model',
   ];
   const updates = [];
   const values = [];

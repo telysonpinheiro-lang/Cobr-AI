@@ -11,7 +11,7 @@ const EMPTY_FORM = {
 };
 
 export default function Upload() {
-  const [tab, setTab] = useState('file'); // 'file' | 'manual'
+  const [tab, setTab] = useState('manual'); // 'manual' | 'file'
   const navigate = useNavigate();
 
   // ----- upload de arquivo -----
@@ -86,16 +86,16 @@ export default function Upload() {
 
       <div className="tabs">
         <button
-          className={`tab ${tab === 'file' ? 'active' : ''}`}
-          onClick={() => setTab('file')}
-        >
-          Importar planilha
-        </button>
-        <button
           className={`tab ${tab === 'manual' ? 'active' : ''}`}
           onClick={() => setTab('manual')}
         >
           Cadastro manual
+        </button>
+        <button
+          className={`tab ${tab === 'file' ? 'active' : ''}`}
+          onClick={() => setTab('file')}
+        >
+          Importar planilha
         </button>
       </div>
 

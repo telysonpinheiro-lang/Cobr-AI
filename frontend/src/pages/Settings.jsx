@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 
+const PROVIDERS = [
+  { value: 'mock',      label: 'Mock (sem envio real)' },
+  { value: 'evolution', label: 'Evolution API' },
+  { value: 'zapi',      label: 'Z-API' },
+];
+
 export default function Settings() {
-  const [s, setS] = useState(null);
-  const [msg, setMsg] = useState('');
+  const [s, setS]           = useState(null);
+  const [msg, setMsg]       = useState('');
+  const [testMsg, setTestMsg] = useState('');
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => { api.getSettings().then(setS); }, []);
 
@@ -12,10 +20,29 @@ export default function Settings() {
   async function save() {
     await api.saveSettings(s);
     setMsg('Configurações salvas');
-    setTimeout(() => setMsg(''), 2000);
+    setTimeout(() => setMsg(''), 2500);
+  }
+
+  async function testEvolution() {
+    setTesting(true);
+    setTestMsg('');
+    try {
+      await api.testEvolution({
+        evolution_base_url:  s.evolution_base_url,
+        evolution_api_key:   s.evolution_api_key,
+        evolution_instance:  s.evolution_instance,
+      });
+      setTestMsg('✓ Conexão OK — instância conectada!');
+    } catch (err) {
+      setTestMsg('✗ ' + err.message);
+    } finally {
+      setTesting(false);
+    }
   }
 
   if (!s) return <p>Carregando...</p>;
+
+  const isEvolution = s.whatsapp_provider === 'evolution';
 
   return (
     <div>
@@ -81,6 +108,83 @@ export default function Settings() {
               onChange={(e) => update('send_window_end', e.target.value)} />
           </div>
         </div>
+      </div>
+
+      {/* ── Integração WhatsApp ─────────────────────────────────── */}
+      <div className="panel">
+        <h3>Integração WhatsApp</h3>
+
+        <div className="field" style={{ marginBottom: 16 }}>
+          <label>Provedor</label>
+          <select
+            value={s.whatsapp_provider || 'mock'}
+            onChange={(e) => update('whatsapp_provider', e.target.value)}
+          >
+            {PROVIDERS.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {isEvolution && (
+          <>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>URL base da Evolution API</label>
+              <input
+                type="url"
+                placeholder="http://SEU-IP:8080"
+                value={s.evolution_base_url || ''}
+                onChange={(e) => update('evolution_base_url', e.target.value)}
+              />
+            </div>
+
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>API Key</label>
+              <input
+                type="password"
+                placeholder="sua-api-key"
+                value={s.evolution_api_key || ''}
+                onChange={(e) => update('evolution_api_key', e.target.value)}
+              />
+            </div>
+
+            <div className="field" style={{ marginBottom: 16 }}>
+              <label>Nome da instância</label>
+              <input
+                type="text"
+                placeholder="minha-instancia"
+                value={s.evolution_instance || ''}
+                onChange={(e) => update('evolution_instance', e.target.value)}
+              />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <button
+                onClick={testEvolution}
+                disabled={testing}
+                style={{ background: '#2563eb' }}
+              >
+                {testing ? 'Testando...' : 'Testar conexão'}
+              </button>
+              {testMsg && (
+                <span style={{
+                  color: testMsg.startsWith('✓') ? '#16a34a' : '#dc2626',
+                  fontWeight: 500,
+                }}>
+                  {testMsg}
+                </span>
+              )}
+            </div>
+
+            <p style={{ marginTop: 14, fontSize: 13, color: '#6b7280' }}>
+              Configure o webhook da instância para:<br />
+              <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>
+                POST {window.location.origin.replace('5173', '4000')}/api/webhook/whatsapp
+              </code>
+              <br />Evento: <strong>messages.upsert</strong>
+            </p>
+          </>
+        )}
       </div>
 
       <button onClick={save}>Salvar configurações</button>
