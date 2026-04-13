@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../config/db');
 const { authRequired } = require('../middleware/auth');
+const { validateExternalUrl } = require('../middleware/security');
 
 const router = express.Router();
 router.use(authRequired);
@@ -16,7 +17,15 @@ router.get('/', async (req, res) => {
      FROM companies WHERE id = ?`,
     [req.user.companyId]
   );
-  res.json({ ...s, ...c });
+  // Mascara API keys parcialmente antes de retornar ao frontend
+  const masked = { ...s, ...c };
+  if (masked.evolution_api_key) {
+    masked.evolution_api_key = masked.evolution_api_key.slice(0, 4) + '****';
+  }
+  if (masked.openai_api_key) {
+    masked.openai_api_key = masked.openai_api_key.slice(0, 7) + '****';
+  }
+  res.json(masked);
 });
 
 // PUT /api/settings — atualiza settings E config de integração
@@ -54,6 +63,8 @@ router.put('/', async (req, res) => {
   const companyValues  = [];
   for (const k of companyFields) {
     if (req.body[k] !== undefined) {
+      // Ignora valores mascarados (****) para não sobrescrever a chave real
+      if (typeof req.body[k] === 'string' && req.body[k].includes('****')) continue;
       companyUpdates.push(`${k} = ?`);
       companyValues.push(req.body[k] === '' ? null : req.body[k]);
     }
@@ -82,6 +93,17 @@ router.post('/test-evolution', async (req, res) => {
       return res.status(400).json({ error: 'Preencha base_url, api_key e instance' });
     }
 
+    // Proteção SSRF: valida que a URL não aponta para rede interna
+    const urlError = validateExternalUrl(baseUrl);
+    if (urlError) {
+      return res.status(400).json({ error: `URL inválida: ${urlError}` });
+    }
+
+    // Limita tamanho dos inputs
+    if (apiKey.length > 256 || instance.length > 128) {
+      return res.status(400).json({ error: 'parâmetros muito longos' });
+    }
+
     // Verifica se a instância existe e está conectada
     const r = await fetch(`${baseUrl}/instance/fetchInstances`, {
       headers: { apikey: apiKey },
@@ -89,7 +111,8 @@ router.post('/test-evolution', async (req, res) => {
 
     if (!r.ok) {
       const txt = await r.text();
-      return res.status(400).json({ error: `Evolution retornou ${r.status}: ${txt}` });
+      // Limita a resposta para não vazar dados internos
+      return res.status(400).json({ error: `Evolution retornou ${r.status}` });
     }
 
     const data = await r.json();
@@ -115,7 +138,7 @@ router.post('/test-evolution', async (req, res) => {
 
     res.json({ ok: true, instance, state });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'erro ao testar conexão' });
   }
 });
 

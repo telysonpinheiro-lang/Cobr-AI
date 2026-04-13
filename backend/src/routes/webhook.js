@@ -10,6 +10,7 @@ const { generateReply } = require('../services/ai');
 const { sendMessage } = require('../services/whatsapp');
 const { createCharge } = require('../services/payment');
 const { getCompanyConfig } = require('../services/companyConfig');
+const { webhookLimiter, paymentWebhookSignatureCheck } = require('../middleware/security');
 
 const router = express.Router();
 
@@ -33,18 +34,20 @@ function parseWebhookPayload(raw) {
       '';
 
     if (!phone || !body) return null;
-    return { phone, body, instance: raw.instance || null };
+    // Limita tamanho da mensagem recebida para evitar processamento excessivo
+    return { phone, body: body.slice(0, 2000), instance: raw.instance || null };
   }
 
   // Z-API / genérico
   const phone = String(raw.phone || raw.from || '').replace(/\D/g, '');
-  const body  = raw.body || raw.text || raw.message || '';
+  const body  = String(raw.body || raw.text || raw.message || '').slice(0, 2000);
   if (!phone || !body) return null;
   return { phone, body, instance: null };
 }
 
 // Encontra o devedor e sua empresa pelo telefone.
-// Se a instância for informada, restringe à empresa dona da instância.
+// Se a instância for informada, RESTRINGE à empresa dona da instância (multi-tenant seguro).
+// O fallback sem instância só é usado para configurações single-tenant.
 async function findDebtor(phone, instance) {
   if (instance) {
     // busca empresa pela instância e depois o devedor dentro dela
@@ -59,8 +62,11 @@ async function findDebtor(phone, instance) {
       );
       if (debtor) return debtor;
     }
+    // Se a instância foi fornecida mas não encontrou empresa/devedor, NÃO faz fallback
+    // para evitar vazamento de dados entre tenants
+    return null;
   }
-  // fallback: procura em todas as empresas (compatível com Z-API / single-tenant)
+  // fallback: apenas para single-tenant (sem instância configurada)
   const [[debtor]] = await pool.query(
     'SELECT * FROM debtors WHERE phone = ? LIMIT 1',
     [phone]
@@ -68,7 +74,7 @@ async function findDebtor(phone, instance) {
   return debtor || null;
 }
 
-router.post('/whatsapp', async (req, res) => {
+router.post('/whatsapp', webhookLimiter, async (req, res) => {
   try {
     const parsed = parseWebhookPayload(req.body);
     if (!parsed) return res.json({ ok: true, ignored: true });
@@ -77,7 +83,7 @@ router.post('/whatsapp', async (req, res) => {
     const debtor = await findDebtor(phone, instance);
 
     if (!debtor) {
-      console.warn('[webhook] devedor não encontrado para', phone);
+      // Não loga o telefone completo para proteger dados pessoais nos logs
       return res.json({ ok: true, ignored: true });
     }
 
@@ -106,6 +112,12 @@ router.post('/whatsapp', async (req, res) => {
       const discount     = Number(deal.discount_pct  || 0);
       const installments = Number(deal.installments  || 1);
       const finalAmount  = Number(deal.final_amount);
+
+      // Valida que os valores estão em faixas razoáveis
+      if (finalAmount <= 0 || finalAmount > 10_000_000) {
+        console.warn('[webhook] valor de acordo fora do intervalo permitido:', finalAmount);
+        return res.json({ ok: true });
+      }
 
       if (discount <= Number(settings.max_discount) &&
           installments <= Number(settings.max_installments)) {
@@ -147,19 +159,29 @@ router.post('/whatsapp', async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    console.error('[webhook] erro', err);
-    res.status(500).json({ error: err.message });
+    console.error('[webhook] erro:', err.message);
+    res.status(500).json({ error: 'erro interno' });
   }
 });
 
-// Webhook de pagamento — chamado pelo gateway quando pagamento é confirmado
-router.post('/payment', async (req, res) => {
+// Webhook de pagamento — chamado pelo gateway quando pagamento é confirmado.
+// Protegido por verificação de assinatura HMAC (configurar WEBHOOK_PAYMENT_SECRET no .env).
+router.post('/payment', webhookLimiter, paymentWebhookSignatureCheck, async (req, res) => {
   const providerId = req.body.providerId || req.body.id;
-  if (!providerId) return res.status(400).json({ error: 'providerId ausente' });
+  if (!providerId || typeof providerId !== 'string' || providerId.length > 128) {
+    return res.status(400).json({ error: 'providerId ausente ou inválido' });
+  }
+
   const [[payment]] = await pool.query(
     'SELECT * FROM payments WHERE provider_id = ?', [providerId]
   );
   if (!payment) return res.status(404).json({ error: 'pagamento não encontrado' });
+
+  // Só atualiza se ainda não foi pago (evita replay attacks)
+  if (payment.status === 'pago') {
+    return res.json({ ok: true, alreadyPaid: true });
+  }
+
   await pool.query(
     `UPDATE payments SET status = 'pago', paid_at = NOW() WHERE id = ?`, [payment.id]
   );

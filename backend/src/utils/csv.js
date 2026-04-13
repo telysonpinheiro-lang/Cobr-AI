@@ -1,5 +1,5 @@
 const { parse } = require('csv-parse/sync');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const {
   normalizePhone, parseAmount, parseDate, parseInstallments,
 } = require('./validators');
@@ -20,12 +20,27 @@ function normalizeKey(k) {
     .trim();
 }
 
-function rowsFromBuffer(buffer, originalName = '') {
+async function rowsFromBuffer(buffer, originalName = '') {
   const ext = originalName.toLowerCase().split('.').pop();
   if (ext === 'xlsx' || ext === 'xls') {
-    const wb = XLSX.read(buffer, { type: 'buffer' });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    return XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const sheet = workbook.worksheets[0];
+    if (!sheet) return [];
+
+    const rows = [];
+    let headers = [];
+    sheet.eachRow((row, rowNum) => {
+      const values = row.values.slice(1); // eachRow inclui índice 0 vazio
+      if (rowNum === 1) {
+        headers = values.map((v) => String(v || ''));
+      } else {
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
+        rows.push(obj);
+      }
+    });
+    return rows;
   }
   // CSV (default)
   return parse(buffer.toString('utf8'), {
@@ -36,8 +51,8 @@ function rowsFromBuffer(buffer, originalName = '') {
   });
 }
 
-function parseDebtorsFile(buffer, originalName) {
-  const rows = rowsFromBuffer(buffer, originalName);
+async function parseDebtorsFile(buffer, originalName) {
+  const rows = await rowsFromBuffer(buffer, originalName);
   const seen = new Set();
   const valid = [];
   const errors = [];
