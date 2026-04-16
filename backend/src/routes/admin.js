@@ -18,11 +18,13 @@ const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
 const { authRequired, superAdminRequired } = require('../middleware/auth');
 
+const asyncHandler = require('../utils/asyncHandler');
+
 const router = express.Router();
 router.use(authRequired, superAdminRequired);
 
 // ─── ESTATÍSTICAS GLOBAIS ─────────────────────────────────────────────────────
-router.get('/stats', async (req, res) => {
+router.get('/stats', asyncHandler(async (req, res) => {
   const [[companies]] = await pool.query(
     `SELECT COUNT(*) AS total,
             SUM(status = 'active') AS active,
@@ -51,10 +53,10 @@ router.get('/stats', async (req, res) => {
     },
     messages: Number(messages.total),
   });
-});
+}));
 
 // ─── LISTAR EMPRESAS ──────────────────────────────────────────────────────────
-router.get('/companies', async (req, res) => {
+router.get('/companies', asyncHandler(async (req, res) => {
   const { q } = req.query;
   let sql = `
     SELECT c.*,
@@ -70,7 +72,7 @@ router.get('/companies', async (req, res) => {
   sql += ' GROUP BY c.id ORDER BY c.id DESC LIMIT 200';
   const [rows] = await pool.query(sql, params);
   res.json(rows);
-});
+}));
 
 // ─── CRIAR EMPRESA ────────────────────────────────────────────────────────────
 router.post('/companies', async (req, res) => {
@@ -118,7 +120,7 @@ router.post('/companies', async (req, res) => {
 });
 
 // ─── DETALHE EMPRESA ─────────────────────────────────────────────────────────
-router.get('/companies/:id', async (req, res) => {
+router.get('/companies/:id', asyncHandler(async (req, res) => {
   const [[company]] = await pool.query('SELECT * FROM companies WHERE id = ?', [req.params.id]);
   if (!company) return res.status(404).json({ error: 'não encontrada' });
   const [users] = await pool.query(
@@ -133,10 +135,10 @@ router.get('/companies/:id', async (req, res) => {
     [req.params.id]
   );
   res.json({ company, users, metrics });
-});
+}));
 
 // ─── ATUALIZAR EMPRESA ────────────────────────────────────────────────────────
-router.put('/companies/:id', async (req, res) => {
+router.put('/companies/:id', asyncHandler(async (req, res) => {
   const allowed = [
     'name', 'plan', 'monthly_price', 'revenue_share', 'status',
     'whatsapp_provider', 'evolution_base_url', 'evolution_api_key', 'evolution_instance',
@@ -154,14 +156,14 @@ router.put('/companies/:id', async (req, res) => {
   values.push(req.params.id);
   await pool.query(`UPDATE companies SET ${updates.join(', ')} WHERE id = ?`, values);
   res.json({ ok: true });
-});
+}));
 
 // ─── SUSPENDER EMPRESA ────────────────────────────────────────────────────────
 // Suspender (soft)
-router.delete('/companies/:id', async (req, res) => {
+router.delete('/companies/:id', asyncHandler(async (req, res) => {
   await pool.query(`UPDATE companies SET status = 'suspended' WHERE id = ?`, [req.params.id]);
   res.json({ ok: true });
-});
+}));
 
 // Excluir permanentemente (hard delete — remove empresa, usuários, devedores, etc.)
 router.delete('/companies/:id/destroy', async (req, res) => {
@@ -189,13 +191,13 @@ router.delete('/companies/:id/destroy', async (req, res) => {
 });
 
 // ─── USUÁRIOS DE UMA EMPRESA ─────────────────────────────────────────────────
-router.get('/companies/:id/users', async (req, res) => {
+router.get('/companies/:id/users', asyncHandler(async (req, res) => {
   const [rows] = await pool.query(
     'SELECT id, name, email, role, is_super_admin, created_at FROM users WHERE company_id = ?',
     [req.params.id]
   );
   res.json(rows);
-});
+}));
 
 router.post('/companies/:id/users', async (req, res) => {
   const { name, email, password, role = 'operator' } = req.body || {};
@@ -213,10 +215,10 @@ router.post('/companies/:id/users', async (req, res) => {
   }
 });
 
-router.delete('/companies/:id/users/:uid', async (req, res) => {
+router.delete('/companies/:id/users/:uid', asyncHandler(async (req, res) => {
   await pool.query('DELETE FROM users WHERE id = ? AND company_id = ?',
     [req.params.uid, req.params.id]);
   res.json({ ok: true });
-});
+}));
 
 module.exports = router;

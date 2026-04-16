@@ -73,17 +73,16 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/admin',   adminRoutes);
 
-// gatilho manual da régua — somente em desenvolvimento
-if (process.env.NODE_ENV !== 'production') {
-  app.post('/api/scheduler/run', async (_, res) => {
-    try {
-      const r = await runDunningOnce();
-      res.json(r);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
-}
+// gatilho manual da régua — apenas super admins
+const { authRequired, superAdminRequired } = require('./middleware/auth');
+app.post('/api/scheduler/run', authRequired, superAdminRequired, async (_, res) => {
+  try {
+    const r = await runDunningOnce();
+    res.json(r);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ error: 'not found' }));
@@ -106,34 +105,12 @@ const BCRYPT_ROUNDS = 12;
 
 async function bootstrapDemo() {
   try {
-    const [users] = await pool.query('SELECT id FROM users LIMIT 1');
-    if (users.length) return;
-
-    // empresa demo
-    const [r] = await pool.query(
-      'INSERT INTO companies (name, plan, monthly_price, status) VALUES ("Empresa Demo", "starter", 0, "active")'
-    );
-    const companyId = r.insertId;
-    await pool.query('INSERT IGNORE INTO settings (company_id) VALUES (?)', [companyId]);
-
-    const hash = await bcrypt.hash('demo123', BCRYPT_ROUNDS);
+    const [companies] = await pool.query('SELECT id FROM companies LIMIT 1');
+    if (companies.length) return;
     await pool.query(
-      `INSERT INTO users (company_id, name, email, password_hash, role)
-       VALUES (?, "Admin Demo", "demo@cobrai.com", ?, "owner")`,
-      [companyId, hash]
+      'INSERT INTO companies (name, plan, monthly_price, status) VALUES ("VirtualCore", "pro", 0, "active")'
     );
-
-    // super admin (acesso ao painel administrativo)
-    const superHash = await bcrypt.hash('admin123', BCRYPT_ROUNDS);
-    await pool.query(
-      `INSERT INTO users (company_id, name, email, password_hash, role, is_super_admin)
-       VALUES (?, "Super Admin", "admin@cobrai.com", ?, "owner", 1)`,
-      [companyId, superHash]
-    );
-
-    // Não loga credenciais — apenas avisa que o bootstrap foi feito
-    console.log('[bootstrap] usuário demo criado — altere as senhas padrão imediatamente!');
-    console.log('[bootstrap] acesse /api/admin para trocar a senha do super admin');
+    console.log('[bootstrap] empresa padrão criada. Crie usuários via painel admin.');
   } catch (err) {
     console.error('[bootstrap] falhou:', err.message);
   }

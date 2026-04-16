@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api.js';
+import { api, getUser } from '../api.js';
 
 const STATUS_LABEL = {
   nao_contatado: 'Não contatado',
@@ -18,6 +18,7 @@ function brl(v) {
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const user = getUser();
 
   useEffect(() => { load(); }, []);
 
@@ -43,7 +44,9 @@ export default function Dashboard() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2>Dashboard</h2>
-        <button className="secondary" onClick={runRegua}>Rodar régua agora</button>
+        {user?.isSuperAdmin && (
+          <button className="secondary" onClick={runRegua}>Rodar régua agora</button>
+        )}
       </div>
 
       <div className="cards">

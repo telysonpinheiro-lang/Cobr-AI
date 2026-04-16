@@ -2,10 +2,12 @@ const express = require('express');
 const pool = require('../config/db');
 const { authRequired } = require('../middleware/auth');
 
+const asyncHandler = require('../utils/asyncHandler');
+
 const router = express.Router();
 router.use(authRequired);
 
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const companyId = req.user.companyId;
 
   const [[totals]] = await pool.query(
@@ -37,6 +39,6 @@ router.get('/', async (req, res) => {
     conversion_rate:  conversion,
     by_status:        byStatus,
   });
-});
+}));
 
 module.exports = router;

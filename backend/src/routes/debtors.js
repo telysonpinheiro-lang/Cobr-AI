@@ -9,6 +9,8 @@ const { createCharge } = require('../services/payment');
 const { getCompanyConfig } = require('../services/companyConfig');
 const { sanitizeSearchParam } = require('../middleware/security');
 
+const asyncHandler = require('../utils/asyncHandler');
+
 const router = express.Router();
 router.use(authRequired);
 
@@ -44,7 +46,7 @@ const upload = multer({
 });
 
 // LISTAR
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { status } = req.query;
   const q = sanitizeSearchParam(req.query.q, 100);
 
@@ -66,10 +68,10 @@ router.get('/', async (req, res) => {
   sql += ' ORDER BY created_at DESC LIMIT 500';
   const [rows] = await pool.query(sql, params);
   res.json(rows);
-});
+}));
 
 // DETALHE + histórico
-router.get('/:id', async (req, res) => {
+router.get('/:id', asyncHandler(async (req, res) => {
   const [[debtor]] = await pool.query(
     'SELECT * FROM debtors WHERE id = ? AND company_id = ?',
     [req.params.id, req.user.companyId]
@@ -85,7 +87,7 @@ router.get('/:id', async (req, res) => {
     'SELECT * FROM payments WHERE debtor_id = ? ORDER BY created_at DESC', [debtor.id]
   );
   res.json({ debtor, messages, deals, payments });
-});
+}));
 
 // CRIAR (avulso)
 router.post('/', async (req, res) => {
@@ -121,7 +123,7 @@ router.post('/', async (req, res) => {
 });
 
 // ATUALIZAR STATUS
-router.patch('/:id', async (req, res) => {
+router.patch('/:id', asyncHandler(async (req, res) => {
   const { status } = req.body || {};
   const allowed = ['nao_contatado','em_conversa','negociando','aguardando_pagamento','pago','ignorado'];
   if (!allowed.includes(status)) return res.status(400).json({ error: 'status inválido' });
@@ -130,7 +132,7 @@ router.patch('/:id', async (req, res) => {
     [status, req.params.id, req.user.companyId]
   );
   res.json({ ok: true });
-});
+}));
 
 // UPLOAD CSV/XLSX
 router.post('/upload', upload.single('file'), async (req, res) => {
@@ -168,7 +170,7 @@ router.use((err, req, res, next) => {
 });
 
 // ENVIAR MENSAGEM MANUAL (operador) — passa pela IA
-router.post('/:id/send', async (req, res) => {
+router.post('/:id/send', asyncHandler(async (req, res) => {
   const { body } = req.body || {};
   const [[debtor]] = await pool.query(
     'SELECT * FROM debtors WHERE id = ? AND company_id = ?',
@@ -191,10 +193,10 @@ router.post('/:id/send', async (req, res) => {
     [debtor.id]
   );
   res.json({ ok: true });
-});
+}));
 
 // GERAR LINK DE PAGAMENTO
-router.post('/:id/payment', async (req, res) => {
+router.post('/:id/payment', asyncHandler(async (req, res) => {
   const { amount, method = 'pix', dealId } = req.body || {};
   const [[debtor]] = await pool.query(
     'SELECT * FROM debtors WHERE id = ? AND company_id = ?',
@@ -231,10 +233,10 @@ router.post('/:id/payment', async (req, res) => {
   );
 
   res.json({ paymentId: r.insertId, charge });
-});
+}));
 
 // MARCAR PAGAMENTO COMO PAGO (mock / manual)
-router.post('/:id/payment/:paymentId/confirm', async (req, res) => {
+router.post('/:id/payment/:paymentId/confirm', asyncHandler(async (req, res) => {
   // Verifica que o devedor pertence à empresa do usuário antes de confirmar
   const [[debtor]] = await pool.query(
     'SELECT id FROM debtors WHERE id = ? AND company_id = ?',
@@ -248,6 +250,6 @@ router.post('/:id/payment/:paymentId/confirm', async (req, res) => {
   );
   await pool.query(`UPDATE debtors SET status = 'pago' WHERE id = ?`, [req.params.id]);
   res.json({ ok: true });
-});
+}));
 
 module.exports = router;

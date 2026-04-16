@@ -3,11 +3,13 @@ const pool = require('../config/db');
 const { authRequired } = require('../middleware/auth');
 const { validateExternalUrl } = require('../middleware/security');
 
+const asyncHandler = require('../utils/asyncHandler');
+
 const router = express.Router();
 router.use(authRequired);
 
 // GET /api/settings — retorna settings + config de integração da empresa
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const [[s]] = await pool.query(
     'SELECT * FROM settings WHERE company_id = ?', [req.user.companyId]
   );
@@ -26,10 +28,10 @@ router.get('/', async (req, res) => {
     masked.openai_api_key = masked.openai_api_key.slice(0, 7) + '****';
   }
   res.json(masked);
-});
+}));
 
 // PUT /api/settings — atualiza settings E config de integração
-router.put('/', async (req, res) => {
+router.put('/', asyncHandler(async (req, res) => {
   // campos da tabela settings
   const settingsFields = [
     'tone', 'max_discount', 'max_installments',
@@ -78,7 +80,7 @@ router.put('/', async (req, res) => {
   }
 
   res.json({ ok: true });
-});
+}));
 
 // POST /api/settings/test-evolution — testa conexão com Evolution API
 router.post('/test-evolution', async (req, res) => {

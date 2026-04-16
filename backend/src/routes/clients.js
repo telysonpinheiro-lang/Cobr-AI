@@ -14,11 +14,13 @@ const express = require('express');
 const pool = require('../config/db');
 const { authRequired } = require('../middleware/auth');
 
+const asyncHandler = require('../utils/asyncHandler');
+
 const router = express.Router();
 router.use(authRequired);
 
 // LISTAR clientes (agrupados por telefone)
-router.get('/', async (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { q } = req.query;
   const params = [req.user.companyId];
   let where = 'WHERE company_id = ?';
@@ -47,10 +49,10 @@ router.get('/', async (req, res) => {
     params
   );
   res.json(rows);
-});
+}));
 
 // DETALHE de um cliente (telefone) + todas as dívidas
-router.get('/:phone', async (req, res) => {
+router.get('/:phone', asyncHandler(async (req, res) => {
   const { phone } = req.params;
   const [debts] = await pool.query(
     `SELECT * FROM debtors
@@ -104,7 +106,7 @@ router.get('/:phone', async (req, res) => {
     messages,
     payments,
   });
-});
+}));
 
 // EXCLUIR cliente — remove todas as dívidas e histórico relacionado
 router.delete('/:phone', async (req, res) => {
@@ -139,7 +141,7 @@ router.delete('/:phone', async (req, res) => {
 });
 
 // RENOMEAR cliente (atualiza o nome em todas as dívidas dele)
-router.patch('/:phone', async (req, res) => {
+router.patch('/:phone', asyncHandler(async (req, res) => {
   const { name } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'nome obrigatório' });
   await pool.query(
@@ -147,6 +149,6 @@ router.patch('/:phone', async (req, res) => {
     [name.trim(), req.user.companyId, req.params.phone]
   );
   res.json({ ok: true });
-});
+}));
 
 module.exports = router;

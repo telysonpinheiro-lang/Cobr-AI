@@ -179,7 +179,7 @@ export default function Settings() {
             <p style={{ marginTop: 14, fontSize: 13, color: '#6b7280' }}>
               Configure o webhook da instância para:<br />
               <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>
-                POST {window.location.origin.replace('5173', '4000')}/api/webhook/whatsapp
+                POST {window.location.origin}/api/webhook/whatsapp
               </code>
               <br />Evento: <strong>messages.upsert</strong>
             </p>
