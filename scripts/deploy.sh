@@ -65,6 +65,7 @@ check_var MYSQL_PASSWORD
 check_var EVOLUTION_API_KEY
 check_var REDIS_PASSWORD
 check_var PG_PASSWORD
+check_var CORS_ORIGIN
 ok ".env validado"
 
 # ── Atualizar código do repositório ───────────────────────────
@@ -105,7 +106,7 @@ else
 fi
 
 # ── Health check do frontend ──────────────────────────────────
-HTTP_FE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:80" 2>/dev/null || echo "000")
+HTTP_FE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000" 2>/dev/null || echo "000")
 if [ "$HTTP_FE" = "200" ]; then
   ok "Frontend respondendo (HTTP 200)"
 else

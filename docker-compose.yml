@@ -126,7 +126,7 @@ services:
     volumes:
       - evolution_instances:/evolution/instances
     environment:
-      SERVER_URL: "http://${SERVER_IP}:8080"
+      SERVER_URL: "${EVOLUTION_URL:-http://${SERVER_IP}:8080}"
       DEL_INSTANCE: "false"
       AUTHENTICATION_TYPE: apikey
       AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY}"
