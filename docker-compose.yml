@@ -75,7 +75,7 @@ services:
     container_name: cobrai_frontend
     restart: always
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - backend
     networks:
