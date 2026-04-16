@@ -19,6 +19,9 @@ const { apiLimiter } = require('./middleware/security');
 
 const app = express();
 
+// Confia no proxy reverso Nginx (necessário para express-rate-limit funcionar corretamente)
+app.set('trust proxy', 1);
+
 // ─── Security Headers (helmet) ───────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
