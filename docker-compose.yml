@@ -1,0 +1,170 @@
+# Cobr-AI — Stack completo
+# Serviços: MySQL · Backend (Node) · Frontend (Nginx) · Evolution API · Redis · PostgreSQL
+#
+# Configuração:
+#   cp .env.example .env   # preencha todas as variáveis
+#   docker compose up -d --build
+
+services:
+
+  # ── MySQL (banco da aplicação Cobr-AI) ──────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: cobrai_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+      MYSQL_DATABASE: cobrai
+      MYSQL_USER: cobrai_user
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    networks:
+      - cobrai_net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost",
+             "-u", "cobrai_user", "--password=${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Backend (Node.js / Express) ──────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cobrai_backend
+    restart: always
+    ports:
+      - "${BACKEND_PORT:-4010}:4000"   # exposto para receber webhooks da Evolution API
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      JWT_SECRET: "${JWT_SECRET}"
+      CORS_ORIGIN: "http://${SERVER_IP}"
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: cobrai_user
+      DB_PASSWORD: "${MYSQL_PASSWORD}"
+      DB_NAME: cobrai
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      OPENAI_MODEL: "${OPENAI_MODEL:-gpt-4o-mini}"
+      WHATSAPP_PROVIDER: "${WHATSAPP_PROVIDER:-evolution}"
+      EVOLUTION_BASE_URL: "http://evolution:8080"
+      EVOLUTION_API_KEY: "${EVOLUTION_API_KEY}"
+      EVOLUTION_INSTANCE: "${EVOLUTION_INSTANCE:-cobrai}"
+      PAYMENT_PROVIDER: "${PAYMENT_PROVIDER:-mock}"
+      ASAAS_API_KEY: "${ASAAS_API_KEY:-}"
+      ASAAS_BASE_URL: "${ASAAS_BASE_URL:-https://api.asaas.com/v3}"
+      PAGARME_API_KEY: "${PAGARME_API_KEY:-}"
+      WEBHOOK_PAYMENT_SECRET: "${WEBHOOK_PAYMENT_SECRET:-}"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - cobrai_net
+
+  # ── Frontend (React build servido por Nginx) ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""    # URLs relativas → Nginx faz proxy para /api/
+    container_name: cobrai_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - cobrai_net
+
+  # ── PostgreSQL (banco interno da Evolution API) ───────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: cobrai_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: "${PG_PASSWORD}"
+      POSTGRES_DB: evolution
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - cobrai_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (cache interno da Evolution API) ────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: cobrai_redis
+    restart: always
+    command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD}"
+    volumes:
+      - redis_data:/data
+    networks:
+      - cobrai_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Evolution API (WhatsApp) ──────────────────────────────────────────────────
+  evolution:
+    image: atendai/evolution-api:latest
+    container_name: cobrai_evolution
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - evolution_instances:/evolution/instances
+    environment:
+      SERVER_URL: "http://${SERVER_IP}:8080"
+      DEL_INSTANCE: "false"
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: "${EVOLUTION_API_KEY}"
+      AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES: "true"
+      CACHE_REDIS_ENABLED: "true"
+      CACHE_REDIS_URI: "redis://:${REDIS_PASSWORD}@redis:6379/1"
+      CACHE_REDIS_PREFIX_KEY: "evolution"
+      CACHE_REDIS_SAVE_INSTANCES: "false"
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: "postgresql://evolution:${PG_PASSWORD}@postgres:5432/evolution"
+      DATABASE_SAVE_DATA_INSTANCE: "true"
+      DATABASE_SAVE_DATA_NEW_MESSAGE: "true"
+      DATABASE_SAVE_MESSAGE_UPDATE: "true"
+      DATABASE_SAVE_DATA_CONTACTS: "true"
+      DATABASE_SAVE_DATA_CHATS: "true"
+      WEBHOOK_GLOBAL_URL: "http://backend:4000/api/webhook/whatsapp"
+      WEBHOOK_GLOBAL_ENABLED: "false"
+      CONFIG_SESSION_PHONE_CLIENT: "Cobr-AI"
+      CONFIG_SESSION_PHONE_NAME: "Chrome"
+      QRCODE_LIMIT: 30
+      LOG_LEVEL: "ERROR,WARN"
+      LOG_COLOR: "true"
+      LOG_BAILEYS: "error"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - cobrai_net
+
+networks:
+  cobrai_net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  postgres_data:
+  redis_data:
+  evolution_instances:
