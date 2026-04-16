@@ -48,30 +48,41 @@ function parseWebhookPayload(raw) {
 // Encontra o devedor e sua empresa pelo telefone.
 // Se a instância for informada, RESTRINGE à empresa dona da instância (multi-tenant seguro).
 // O fallback sem instância só é usado para configurações single-tenant.
+//
+// Normalização: o remoteJid da Evolution chega como 5511999999999.
+// O banco pode ter o número em vários formatos: (11) 99999-9999, 11999999999, etc.
+// Comparamos apenas os últimos 11 dígitos (DDD+número) de ambos os lados.
+function phoneDigits(raw) {
+  const d = String(raw).replace(/\D/g, '');
+  // Remove DDI 55 se presente, fica DDD+número (11 dígitos)
+  return d.startsWith('55') && d.length > 11 ? d.slice(2) : d;
+}
+
 async function findDebtor(phone, instance) {
+  const localPhone = phoneDigits(phone); // ex: 11999999999
+
   if (instance) {
-    // busca empresa pela instância e depois o devedor dentro dela
     const [[company]] = await pool.query(
       `SELECT id FROM companies WHERE evolution_instance = ? AND COALESCE(status,'active') = 'active'`,
       [instance]
     );
     if (company) {
-      const [[debtor]] = await pool.query(
-        'SELECT * FROM debtors WHERE phone = ? AND company_id = ? LIMIT 1',
-        [phone, company.id]
+      const [debtors] = await pool.query(
+        `SELECT * FROM debtors
+          WHERE REGEXP_REPLACE(phone, '[^0-9]', '') LIKE ?
+            AND company_id = ?
+          LIMIT 1`,
+        [`%${localPhone}`, company.id]
       );
-      if (debtor) return debtor;
+      if (debtors.length) return debtors[0];
     }
-    // Se a instância foi fornecida mas não encontrou empresa/devedor, NÃO faz fallback
-    // para evitar vazamento de dados entre tenants
     return null;
   }
-  // fallback: apenas para single-tenant (sem instância configurada)
-  const [[debtor]] = await pool.query(
-    'SELECT * FROM debtors WHERE phone = ? LIMIT 1',
-    [phone]
+  const [debtors] = await pool.query(
+    `SELECT * FROM debtors WHERE REGEXP_REPLACE(phone, '[^0-9]', '') LIKE ? LIMIT 1`,
+    [`%${localPhone}`]
   );
-  return debtor || null;
+  return debtors[0] || null;
 }
 
 router.post('/whatsapp', webhookLimiter, async (req, res) => {

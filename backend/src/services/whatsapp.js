@@ -9,9 +9,18 @@
 
 const DEFAULT_PROVIDER = (process.env.WHATSAPP_PROVIDER || 'mock').toLowerCase();
 
+// Normaliza número BR para formato Evolution: 5511999999999
+function normalizePhone(raw) {
+  const digits = String(raw).replace(/\D/g, '');
+  // já tem DDI 55
+  if (digits.startsWith('55') && digits.length >= 12) return digits;
+  // adiciona DDI 55
+  return '55' + digits;
+}
+
 const mock = {
   async send({ to, body }) {
-    console.log(`[whatsapp:mock] -> ${to}: ${body}`);
+    console.log(`[whatsapp:mock] -> ${normalizePhone(to)}: ${body}`);
     return { providerId: 'mock-' + Date.now() };
   },
 };
@@ -48,10 +57,11 @@ const evolution = {
       throw new Error('Evolution API não configurado (base_url, api_key e instance são obrigatórios)');
     }
 
+    const number = normalizePhone(to);
     const r = await fetch(`${baseUrl}/message/sendText/${instance}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', apikey: apiKey },
-      body: JSON.stringify({ number: to, text: body }),
+      body: JSON.stringify({ number, text: body }),
     });
 
     if (!r.ok) {
@@ -73,4 +83,4 @@ async function sendMessage({ to, body, companyConfig }) {
   return impl.send({ to, body, companyConfig });
 }
 
-module.exports = { sendMessage, DEFAULT_PROVIDER };
+module.exports = { sendMessage, normalizePhone, DEFAULT_PROVIDER };
