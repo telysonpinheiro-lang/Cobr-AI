@@ -7,6 +7,14 @@ const PROVIDERS = [
   { value: 'zapi',      label: 'Z-API' },
 ];
 
+const PIX_TYPES = [
+  { value: 'cpf',       label: 'CPF',              placeholder: '000.000.000-00' },
+  { value: 'cnpj',      label: 'CNPJ',             placeholder: '00.000.000/0001-00' },
+  { value: 'email',     label: 'E-mail',           placeholder: 'seuemail@exemplo.com' },
+  { value: 'telefone',  label: 'Telefone',         placeholder: '(11) 99999-9999' },
+  { value: 'aleatoria', label: 'Chave aleatória',  placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+];
+
 export default function Settings() {
   const [s, setS]                   = useState(null);
   const [msg, setMsg]               = useState('');
@@ -261,6 +269,39 @@ export default function Settings() {
             </p>
           </>
         )}
+      </div>
+
+      {/* ── Chave PIX ───────────────────────────────────────── */}
+      <div className="panel">
+        <h3>Chave PIX para recebimento</h3>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          Usada para gerar os links de pagamento enviados aos devedores.
+        </p>
+        <div className="row">
+          <div className="field" style={{ maxWidth: 180 }}>
+            <label>Tipo de chave</label>
+            <select
+              value={s.pix_key_type || ''}
+              onChange={(e) => update('pix_key_type', e.target.value)}
+            >
+              <option value="">Selecione...</option>
+              {PIX_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Chave PIX</label>
+            <input
+              type="text"
+              value={s.pix_key || ''}
+              placeholder={
+                PIX_TYPES.find((t) => t.value === s.pix_key_type)?.placeholder || 'Digite a chave'
+              }
+              onChange={(e) => update('pix_key', e.target.value)}
+            />
+          </div>
+        </div>
       </div>
 
       {/* ── Status do Scheduler ─────────────────────────────── */}

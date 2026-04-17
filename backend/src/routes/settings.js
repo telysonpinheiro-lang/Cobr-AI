@@ -15,7 +15,8 @@ router.get('/', asyncHandler(async (req, res) => {
   );
   const [[c]] = await pool.query(
     `SELECT whatsapp_provider, evolution_base_url, evolution_api_key, evolution_instance,
-            payment_provider, openai_api_key, openai_model
+            payment_provider, openai_api_key, openai_model,
+            pix_key_type, pix_key
      FROM companies WHERE id = ?`,
     [req.user.companyId]
   );
@@ -60,6 +61,7 @@ router.put('/', asyncHandler(async (req, res) => {
     'evolution_base_url', 'evolution_api_key', 'evolution_instance',
     'payment_provider',
     'openai_api_key', 'openai_model',
+    'pix_key_type', 'pix_key',
   ];
   const companyUpdates = [];
   const companyValues  = [];

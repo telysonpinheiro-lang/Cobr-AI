@@ -59,6 +59,12 @@ async function runMigrations() {
     await ensureColumn('users', 'is_super_admin',
       `is_super_admin TINYINT(1) DEFAULT 0`);
 
+    // Chave PIX da empresa (para geração de links de pagamento)
+    await ensureColumn('companies', 'pix_key_type',
+      `pix_key_type ENUM('cpf','cnpj','email','telefone','aleatoria') DEFAULT NULL`);
+    await ensureColumn('companies', 'pix_key',
+      `pix_key VARCHAR(150) DEFAULT NULL`);
+
     // Log de execuções do scheduler (observabilidade)
     await ensureTable('scheduler_runs', `
       CREATE TABLE scheduler_runs (
