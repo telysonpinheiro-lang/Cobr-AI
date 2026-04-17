@@ -169,7 +169,42 @@ async function generateReply({ debtor, settings, history, lastUserMessage, compa
   return extractAll(text);
 }
 
+// Mensagens de abertura fixas para quando não há OpenAI configurada
+const FALLBACK_OPENINGS = {
+  pre: (debtor) => {
+    const amount = Number(debtor.amount).toFixed(2).replace('.', ',');
+    return `Olá, ${debtor.name}! 😊 Passando para lembrar que seu pagamento de R$ ${amount} vence *amanhã* (${fmtDate(debtor.due_date)}). Qualquer dúvida, estamos à disposição!`;
+  },
+  d1: (debtor) => {
+    const amount = Number(debtor.amount).toFixed(2).replace('.', ',');
+    return `Olá, ${debtor.name}! Identificamos que o pagamento de R$ ${amount} com vencimento em ${fmtDate(debtor.due_date)} ainda não foi quitado. Como posso te ajudar a regularizar?`;
+  },
+  d2: (debtor) => {
+    const amount = Number(debtor.amount).toFixed(2).replace('.', ',');
+    return `Olá, ${debtor.name}! Ainda não tivemos retorno sobre a dívida de R$ ${amount} vencida em ${fmtDate(debtor.due_date)}. Qual seria a melhor data para você realizar o pagamento?`;
+  },
+  d3: (debtor, settings) => {
+    const amount     = Number(debtor.amount).toFixed(2).replace('.', ',');
+    const discounted = (debtor.amount * (1 - settings.max_discount / 100)).toFixed(2).replace('.', ',');
+    const n          = Number(settings.max_installments) || 6;
+    const parcela    = (debtor.amount / n).toFixed(2).replace('.', ',');
+    const promiseCtx = debtor.promised_date
+      ? `Você havia prometido pagar em ${fmtDate(debtor.promised_date)}, mas não identificamos o pagamento. `
+      : '';
+    return `${debtor.name}, ${promiseCtx}temos duas opções para resolver a dívida de R$ ${amount}: (1) quitar hoje com ${settings.max_discount}% de desconto por R$ ${discounted}; ou (2) parcelar em ${n}x de R$ ${parcela} sem juros. Qual prefere?`;
+  },
+};
+
 async function generateOpeningMessage({ debtor, settings, step, companyConfig }) {
+  const apiKey = companyConfig?.ai?.apiKey || process.env.OPENAI_API_KEY;
+
+  // Sem API key: usa mensagem fixa por etapa (evita o fallback genérico)
+  if (!apiKey) {
+    const fn   = FALLBACK_OPENINGS[step] || FALLBACK_OPENINGS.d1;
+    const text = fn(debtor, settings);
+    return extractAll(text);
+  }
+
   const promptFn    = OPENING_PROMPTS[step] || OPENING_PROMPTS.d1;
   const instruction = promptFn(debtor, settings);
   return generateReply({ debtor, settings, history: [], lastUserMessage: instruction, companyConfig });

@@ -191,6 +191,12 @@ router.post('/:id/test-step', asyncHandler(async (req, res) => {
     [debtor.id, reply, providerId]
   );
 
+  // Registra no dunning_log para que o botão de protesto apareça após d3
+  await pool.query(
+    'INSERT IGNORE INTO dunning_log (debtor_id, step) VALUES (?, ?)',
+    [debtor.id, step]
+  );
+
   res.json({ ok: true, step, preview: reply });
 }));
 
