@@ -40,10 +40,15 @@ REGRAS (nunca quebre):
 - Mensagens curtas: máximo 3 frases por resposta
 - Nunca invente dados; use apenas o que está no contexto abaixo
 
-OPÇÕES DE NEGOCIAÇÃO:
-- Desconto de ${settings.max_discount}% SOMENTE para quitação à vista do valor total → R$ ${discountedAmount.toFixed(2)}
-- Parcelamento em até ${installments}x de R$ ${parcela.toFixed(2)} sem acréscimo (SEM desconto)
+OPÇÕES DE NEGOCIAÇÃO DISPONÍVEIS:
+${Number(settings.max_discount) > 0
+  ? `- Desconto de ${settings.max_discount}% SOMENTE para quitação à vista do valor total → R$ ${discountedAmount.toFixed(2)}`
+  : '- Desconto: NÃO disponível'}
+${Number(settings.max_installments) > 1
+  ? `- Parcelamento em até ${installments}x de R$ ${parcela.toFixed(2)} sem acréscimo (SEM desconto)`
+  : '- Parcelamento: NÃO disponível'}
 - Nunca ofereça desconto junto com parcelamento
+- Nunca ofereça opção que não esteja disponível acima
 
 CONTEXTO DO DEVEDOR:
 - Nome: ${debtor.name}
@@ -77,14 +82,29 @@ const OPENING_PROMPTS = {
     return `Gere um follow-up de cobrança para ${debtor.name}. Já enviamos contato sobre a dívida de R$ ${amount}. Seja cordial, mencione que ainda não houve retorno e pergunte qual seria a *melhor data* para que o cliente consiga realizar o pagamento. Não ofereça desconto nem parcelamento — apenas registre o compromisso de data. Hoje é ${todayISO()}.`;
   },
   d3: (debtor, settings) => {
-    const amount       = Number(debtor.amount).toFixed(2);
-    const discounted   = +(debtor.amount * (1 - settings.max_discount / 100)).toFixed(2);
-    const installments = Number(settings.max_installments) || 6;
-    const parcela      = +(debtor.amount / installments).toFixed(2);
-    const promiseCtx   = debtor.promised_date
+    const amount          = Number(debtor.amount).toFixed(2);
+    const promiseCtx      = debtor.promised_date
       ? `O cliente havia prometido pagar em ${fmtDate(debtor.promised_date)}, mas o pagamento não foi identificado. `
       : '';
-    return `Gere a mensagem final de cobrança para ${debtor.name}. ${promiseCtx}A dívida é de R$ ${amount}. Ofereça exatamente duas opções: (1) quitar o valor total hoje com ${settings.max_discount}% de desconto por R$ ${discounted.toFixed(2)}; ou (2) parcelar em ${installments}x de R$ ${parcela.toFixed(2)} sem desconto e sem juros. Seja firme e objetivo.`;
+    const hasDiscount     = Number(settings.max_discount) > 0;
+    const hasInstallments = Number(settings.max_installments) > 1;
+
+    const opts = [];
+    if (hasDiscount) {
+      const discounted = +(debtor.amount * (1 - settings.max_discount / 100)).toFixed(2);
+      opts.push(`quitar o valor total hoje com ${settings.max_discount}% de desconto por R$ ${discounted.toFixed(2)}`);
+    }
+    if (hasInstallments) {
+      const n       = Number(settings.max_installments);
+      const parcela = +(debtor.amount / n).toFixed(2);
+      opts.push(`parcelar em ${n}x de R$ ${parcela.toFixed(2)} sem juros e sem desconto`);
+    }
+
+    if (opts.length === 0) {
+      return `Gere a mensagem final de cobrança para ${debtor.name}. ${promiseCtx}A dívida de R$ ${amount} precisa ser regularizada. Seja firme e objetivo, pedindo que entre em contato imediatamente.`;
+    }
+    const optsText = opts.map((o, i) => `(${i + 1}) ${o}`).join('; ou ');
+    return `Gere a mensagem final de cobrança para ${debtor.name}. ${promiseCtx}A dívida é de R$ ${amount}. Ofereça apenas as seguintes opções: ${optsText}. Seja firme e objetivo.`;
   },
 };
 
@@ -184,14 +204,31 @@ const FALLBACK_OPENINGS = {
     return `Olá, ${debtor.name}! Ainda não tivemos retorno sobre a dívida de R$ ${amount} vencida em ${fmtDate(debtor.due_date)}. Qual seria a melhor data para você realizar o pagamento?`;
   },
   d3: (debtor, settings) => {
-    const amount     = Number(debtor.amount).toFixed(2).replace('.', ',');
-    const discounted = (debtor.amount * (1 - settings.max_discount / 100)).toFixed(2).replace('.', ',');
-    const n          = Number(settings.max_installments) || 6;
-    const parcela    = (debtor.amount / n).toFixed(2).replace('.', ',');
-    const promiseCtx = debtor.promised_date
+    const amount      = Number(debtor.amount).toFixed(2).replace('.', ',');
+    const promiseCtx  = debtor.promised_date
       ? `Você havia prometido pagar em ${fmtDate(debtor.promised_date)}, mas não identificamos o pagamento. `
       : '';
-    return `${debtor.name}, ${promiseCtx}temos duas opções para resolver a dívida de R$ ${amount}: (1) quitar hoje com ${settings.max_discount}% de desconto por R$ ${discounted}; ou (2) parcelar em ${n}x de R$ ${parcela} sem juros. Qual prefere?`;
+    const hasDiscount     = Number(settings.max_discount) > 0;
+    const hasInstallments = Number(settings.max_installments) > 1;
+
+    const options = [];
+    if (hasDiscount) {
+      const discounted = (debtor.amount * (1 - settings.max_discount / 100)).toFixed(2).replace('.', ',');
+      options.push(`quitar hoje com ${settings.max_discount}% de desconto por R$ ${discounted}`);
+    }
+    if (hasInstallments) {
+      const n       = Number(settings.max_installments);
+      const parcela = (debtor.amount / n).toFixed(2).replace('.', ',');
+      options.push(`parcelar em ${n}x de R$ ${parcela} sem juros`);
+    }
+
+    if (options.length === 0) {
+      return `${debtor.name}, ${promiseCtx}a dívida de R$ ${amount} precisa ser regularizada o quanto antes. Entre em contato para resolvermos juntos.`;
+    }
+    if (options.length === 1) {
+      return `${debtor.name}, ${promiseCtx}ainda podemos resolver a dívida de R$ ${amount}: ${options[0]}. Podemos fechar?`;
+    }
+    return `${debtor.name}, ${promiseCtx}temos duas opções para a dívida de R$ ${amount}: (1) ${options[0]}; ou (2) ${options[1]}. Qual prefere?`;
   },
 };
 
