@@ -137,9 +137,14 @@ router.post('/whatsapp', webhookLimiter, async (req, res) => {
       [debtor.id, body]
     );
 
-    const { reply, deal } = await generateReply({
+    const { reply, deal, promise } = await generateReply({
       debtor, settings: effectiveSettings, history, lastUserMessage: body, companyConfig,
     });
+
+    // Salva data prometida pelo devedor (capturada no D+2)
+    if (promise?.date && /^\d{4}-\d{2}-\d{2}$/.test(promise.date)) {
+      await pool.query('UPDATE debtors SET promised_date = ? WHERE id = ?', [promise.date, debtor.id]);
+    }
 
     // Se a IA fechou um acordo, persiste e gera link de pagamento
     if (deal && deal.final_amount) {

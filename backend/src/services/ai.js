@@ -5,69 +5,86 @@ const TONES = {
 };
 
 function daysOverdue(dueDateStr) {
-  const due  = new Date(dueDateStr);
-  const now  = new Date();
+  const due = new Date(dueDateStr);
+  const now = new Date();
   due.setHours(0, 0, 0, 0);
   now.setHours(0, 0, 0, 0);
   return Math.max(0, Math.round((now - due) / 86400000));
 }
 
 function fmtDate(dateStr) {
-  // "2024-03-15" → "15/03/2024"
   const [y, m, d] = String(dateStr).split('-');
   return `${d}/${m}/${y}`;
 }
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function buildSystemPrompt(settings, debtor) {
-  const tone    = TONES[settings.tone] || TONES.amigavel;
-  const overdue = daysOverdue(debtor.due_date);
-  const amount  = Number(debtor.amount).toFixed(2);
+  const tone             = TONES[settings.tone] || TONES.amigavel;
+  const overdue          = daysOverdue(debtor.due_date);
+  const amount           = Number(debtor.amount).toFixed(2);
   const discountedAmount = +(debtor.amount * (1 - settings.max_discount / 100)).toFixed(2);
+  const installments     = Number(settings.max_installments) || 6;
+  const parcela          = +(debtor.amount / installments).toFixed(2);
 
   return `Você é o assistente de cobrança do Cobr-AI — amigável, profissional e focado em resolver.
 Seu único objetivo é recuperar o pagamento em atraso de forma respeitosa.
+Data de hoje: ${todayISO()}
 
 REGRAS (nunca quebre):
 - Nunca ameace, constranja ou pressione de forma abusiva
-- Sempre ofereça uma saída: à vista com desconto OU parcelado
-- Priorize quitação à vista; use desconto só se necessário
-- Desconto máximo: ${settings.max_discount}% → valor final mínimo R$ ${discountedAmount.toFixed(2)}
-- Parcelamento máximo: ${settings.max_installments}x sem acréscimo
 - ${tone}
 - Responda SEMPRE em português do Brasil
 - Mensagens curtas: máximo 3 frases por resposta
 - Nunca invente dados; use apenas o que está no contexto abaixo
+
+OPÇÕES DE NEGOCIAÇÃO:
+- Desconto de ${settings.max_discount}% SOMENTE para quitação à vista do valor total → R$ ${discountedAmount.toFixed(2)}
+- Parcelamento em até ${installments}x de R$ ${parcela.toFixed(2)} sem acréscimo (SEM desconto)
+- Nunca ofereça desconto junto com parcelamento
 
 CONTEXTO DO DEVEDOR:
 - Nome: ${debtor.name}
 - Valor em aberto: R$ ${amount}
 - Vencimento: ${fmtDate(debtor.due_date)} (${overdue} dia${overdue !== 1 ? 's' : ''} em atraso)
 - Parcelamento original: ${debtor.installments}x
+${debtor.promised_date ? `- Cliente prometeu pagar em: ${fmtDate(debtor.promised_date)}` : ''}
 
-QUANDO O CLIENTE ACEITAR UM ACORDO:
-Responda naturalmente E inclua no final da mensagem exatamente:
+QUANDO O CLIENTE ACEITAR UM ACORDO (desconto ou parcelamento):
+Responda naturalmente E inclua no final:
 <acordo>{"final_amount": VALOR, "discount_pct": DESCONTO, "installments": PARCELAS}</acordo>
-Esse JSON é processado automaticamente — não o repita fora das tags.`;
+
+QUANDO O CLIENTE INFORMAR UMA DATA PREFERIDA PARA PAGAMENTO:
+Confirme a data E inclua no final (formato ISO YYYY-MM-DD):
+<promessa>{"date": "YYYY-MM-DD"}</promessa>
+
+Esses blocos são processados automaticamente — não os repita fora das tags.`;
 }
 
-// Prompts específicos por etapa da régua de cobrança
 const OPENING_PROMPTS = {
-  pre: (debtor, settings) => {
+  pre: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2);
-    return `Gere uma mensagem de lembrete amigável para ${debtor.name}. O vencimento da dívida de R$ ${amount} é *amanhã* (${fmtDate(debtor.due_date)}). Seja cordial e positivo — é apenas um lembrete, não uma cobrança. Mencione o valor e a data. Não ofereça desconto nem mencione atraso.`;
+    return `Gere uma mensagem de lembrete amigável para ${debtor.name}. O pagamento de R$ ${amount} vence *amanhã* (${fmtDate(debtor.due_date)}). Seja cordial e positivo — apenas um lembrete, sem cobrar, sem mencionar desconto ou atraso.`;
   },
-  d1: (debtor, settings) => {
+  d1: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2);
-    return `Gere a primeira mensagem de cobrança para ${debtor.name}. A dívida de R$ ${amount} venceu em ${fmtDate(debtor.due_date)}. Aborde de forma amigável, informe o valor e pergunte como pode ajudar a regularizar. Não ofereça desconto nesta primeira mensagem.`;
+    return `Gere a primeira mensagem de cobrança para ${debtor.name}. A dívida de R$ ${amount} venceu em ${fmtDate(debtor.due_date)}. Aborde de forma amigável, informe o valor e pergunte como pode ajudar a regularizar. Não ofereça desconto nem parcelamento nesta mensagem.`;
   },
-  d2: (debtor, settings) => {
+  d2: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2);
-    return `Gere um follow-up de cobrança para ${debtor.name}. Já enviamos a primeira mensagem há alguns dias sobre a dívida de R$ ${amount}. Seja cordial, mencione que ainda não recebemos retorno e pergunte se há algo que possamos fazer para facilitar o pagamento. Pode insinuar que há opções de parcelamento.`;
+    return `Gere um follow-up de cobrança para ${debtor.name}. Já enviamos contato sobre a dívida de R$ ${amount}. Seja cordial, mencione que ainda não houve retorno e pergunte qual seria a *melhor data* para que o cliente consiga realizar o pagamento. Não ofereça desconto nem parcelamento — apenas registre o compromisso de data. Hoje é ${todayISO()}.`;
   },
   d3: (debtor, settings) => {
-    const amount = Number(debtor.amount).toFixed(2);
-    const discounted = +(debtor.amount * (1 - settings.max_discount / 100)).toFixed(2);
-    return `Gere a oferta final de cobrança para ${debtor.name}. Esta é nossa última tentativa amigável antes de outras medidas. A dívida é de R$ ${amount}. Ofereça explicitamente o desconto máximo de ${settings.max_discount}% (R$ ${discounted.toFixed(2)}) para quitação à vista hoje. Seja firme mas respeitoso.`;
+    const amount       = Number(debtor.amount).toFixed(2);
+    const discounted   = +(debtor.amount * (1 - settings.max_discount / 100)).toFixed(2);
+    const installments = Number(settings.max_installments) || 6;
+    const parcela      = +(debtor.amount / installments).toFixed(2);
+    const promiseCtx   = debtor.promised_date
+      ? `O cliente havia prometido pagar em ${fmtDate(debtor.promised_date)}, mas o pagamento não foi identificado. `
+      : '';
+    return `Gere a mensagem final de cobrança para ${debtor.name}. ${promiseCtx}A dívida é de R$ ${amount}. Ofereça exatamente duas opções: (1) quitar o valor total hoje com ${settings.max_discount}% de desconto por R$ ${discounted.toFixed(2)}; ou (2) parcelar em ${installments}x de R$ ${parcela.toFixed(2)} sem desconto e sem juros. Seja firme e objetivo.`;
   },
 };
 
@@ -82,33 +99,42 @@ function fallbackReply(debtor, settings, lastUserMsg) {
     return `Consigo ${settings.max_discount}% de desconto na quitação à vista hoje — de R$ ${Number(debtor.amount).toFixed(2)} por R$ ${finalAmount.toFixed(2)}. Posso gerar o PIX agora? <acordo>{"final_amount": ${finalAmount}, "discount_pct": ${settings.max_discount}, "installments": 1}</acordo>`;
   }
   if (/parcel|dividir|vezes|prestação/.test(text)) {
-    const n = Math.min(Number(settings.max_installments) || 3, 6);
+    const n      = Math.min(Number(settings.max_installments) || 3, 6);
     const parcela = +(debtor.amount / n).toFixed(2);
     return `Posso parcelar em ${n}x de R$ ${parcela.toFixed(2)} sem juros. Fechamos assim? <acordo>{"final_amount": ${Number(debtor.amount).toFixed(2)}, "discount_pct": 0, "installments": ${n}}</acordo>`;
   }
-  if (/quando|prazo|data|semana|mês/.test(text)) {
-    return `Qual data ficaria melhor para você? Posso reservar a condição especial de parcelamento ou desconto até sexta-feira.`;
+  if (/quando|prazo|data|semana|mês|dia \d/.test(text)) {
+    return `Qual data seria melhor para você realizar o pagamento? Assim que me confirmar, reservo as condições especiais até lá.`;
   }
   if (/nao|não|agora não|depois|amanhã|amanha/.test(text)) {
-    return `Entendo! Quando seria um bom momento? Temos opções de parcelamento e desconto para quem regulariza essa semana.`;
+    return `Entendo! Qual data ficaria melhor para você? Posso reservar as condições de desconto ou parcelamento até lá.`;
   }
-  if (/lembrete|amanhã|vencimento|vence/.test(text)) {
+  if (/lembrete|vencimento|vence/.test(text)) {
     const amount = Number(debtor.amount).toFixed(2);
     return `Olá, ${debtor.name}! Só passando para lembrar que seu pagamento de R$ ${amount} vence amanhã (${fmtDate(debtor.due_date)}). Qualquer dúvida, estamos à disposição!`;
   }
   const amount = Number(debtor.amount).toFixed(2);
-  return `Olá, ${debtor.name}! Identificamos um valor de R$ ${amount} em aberto desde ${fmtDate(debtor.due_date)}. Podemos resolver isso agora — prefere pagar à vista com desconto ou parcelar?`;
+  return `Olá, ${debtor.name}! Identificamos um valor de R$ ${amount} em aberto desde ${fmtDate(debtor.due_date)}. Podemos resolver isso agora — prefere quitar à vista com desconto ou parcelar?`;
 }
 
-function extractDeal(text) {
-  const m = text.match(/<acordo>([\s\S]*?)<\/acordo>/i);
-  if (!m) return { reply: text, deal: null };
-  try {
-    const deal = JSON.parse(m[1]);
-    return { reply: text.replace(m[0], '').trim(), deal };
-  } catch {
-    return { reply: text.replace(m[0], '').trim(), deal: null };
+// Extrai <acordo> e <promessa> do texto da IA
+function extractAll(text) {
+  let deal    = null;
+  let promise = null;
+
+  const dealMatch = text.match(/<acordo>([\s\S]*?)<\/acordo>/i);
+  if (dealMatch) {
+    try { deal = JSON.parse(dealMatch[1]); } catch {}
+    text = text.replace(dealMatch[0], '').trim();
   }
+
+  const promiseMatch = text.match(/<promessa>([\s\S]*?)<\/promessa>/i);
+  if (promiseMatch) {
+    try { promise = JSON.parse(promiseMatch[1]); } catch {}
+    text = text.replace(promiseMatch[0], '').trim();
+  }
+
+  return { reply: text, deal, promise };
 }
 
 async function generateReply({ debtor, settings, history, lastUserMessage, companyConfig }) {
@@ -117,7 +143,7 @@ async function generateReply({ debtor, settings, history, lastUserMessage, compa
 
   if (!apiKey) {
     const text = fallbackReply(debtor, settings, lastUserMessage);
-    return extractDeal(text);
+    return extractAll(text);
   }
 
   const { OpenAI } = require('openai');
@@ -140,11 +166,11 @@ async function generateReply({ debtor, settings, history, lastUserMessage, compa
   });
 
   const text = completion.choices[0]?.message?.content || '';
-  return extractDeal(text);
+  return extractAll(text);
 }
 
 async function generateOpeningMessage({ debtor, settings, step, companyConfig }) {
-  const promptFn = OPENING_PROMPTS[step] || OPENING_PROMPTS.d1;
+  const promptFn    = OPENING_PROMPTS[step] || OPENING_PROMPTS.d1;
   const instruction = promptFn(debtor, settings);
   return generateReply({ debtor, settings, history: [], lastUserMessage: instruction, companyConfig });
 }

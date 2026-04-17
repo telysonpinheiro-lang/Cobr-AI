@@ -74,6 +74,10 @@ async function runMigrations() {
       console.log('[migrate] dunning_log.step +pre');
     }
 
+    // Data prometida de pagamento (capturada na conversa D+2)
+    await ensureColumn('debtors', 'promised_date',
+      `promised_date DATE NULL DEFAULT NULL`);
+
     // Chave PIX da empresa (para geração de links de pagamento)
     await ensureColumn('companies', 'pix_key_type',
       `pix_key_type ENUM('cpf','cnpj','email','telefone','aleatoria') DEFAULT NULL`);
