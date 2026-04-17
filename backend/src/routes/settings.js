@@ -177,6 +177,25 @@ router.get('/evolution-qr/:instance', asyncHandler(async (req, res) => {
   const stateData = await stateR.json();
   const state = stateData.instance?.state || stateData.state || 'unknown';
 
+  // Garante que o webhook da instância está configurado (idempotente)
+  try {
+    await fetch(`${internalUrl}/webhook/set/${instance}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: apiKey },
+      body: JSON.stringify({
+        webhook: {
+          enabled: true,
+          url: 'http://backend:4000/api/webhook/whatsapp',
+          webhookByEvents: false,
+          webhookBase64: false,
+          events: ['MESSAGES_UPSERT'],
+        },
+      }),
+    });
+  } catch (err) {
+    console.warn('[settings] falhou ao configurar webhook:', err.message);
+  }
+
   if (state === 'open') {
     const listR = await fetch(`${internalUrl}/instance/fetchInstances`, { headers: { apikey: apiKey } });
     const list = listR.ok ? await listR.json() : [];
