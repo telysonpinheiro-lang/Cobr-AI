@@ -13,7 +13,11 @@ function daysOverdue(dueDateStr) {
 }
 
 function fmtDate(dateStr) {
-  const [y, m, d] = String(dateStr).split('-');
+  // Normaliza: aceita Date object, string ISO ou string BR
+  const iso = dateStr instanceof Date
+    ? dateStr.toISOString().slice(0, 10)
+    : String(dateStr).slice(0, 10);
+  const [y, m, d] = iso.split('-');
   return `${d}/${m}/${y}`;
 }
 
@@ -75,7 +79,7 @@ const OPENING_PROMPTS = {
   },
   d1: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2);
-    return `Gere a primeira mensagem de cobrança para ${debtor.name}. A dívida de R$ ${amount} venceu em ${fmtDate(debtor.due_date)}. Aborde de forma amigável, informe o valor e pergunte como pode ajudar a regularizar. Não ofereça desconto nem parcelamento nesta mensagem.`;
+    return `Gere a primeira mensagem de cobrança para ${debtor.name}. A parcela de R$ ${amount} venceu em ${fmtDate(debtor.due_date)}. Informe o vencimento de forma amigável e pergunte como pode ajudar a regularizar. Não ofereça desconto nem parcelamento.`;
   },
   d2: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2);
@@ -197,7 +201,7 @@ const FALLBACK_OPENINGS = {
   },
   d1: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2).replace('.', ',');
-    return `Olá, ${debtor.name}! Identificamos que o pagamento de R$ ${amount} com vencimento em ${fmtDate(debtor.due_date)} ainda não foi quitado. Como posso te ajudar a regularizar?`;
+    return `Olá, ${debtor.name}! Sua parcela no valor de R$ ${amount} venceu em ${fmtDate(debtor.due_date)}. Podemos te ajudar a regularizar agora?`;
   },
   d2: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2).replace('.', ',');
