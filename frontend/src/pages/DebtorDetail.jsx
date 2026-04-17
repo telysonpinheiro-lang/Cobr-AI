@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api.js';
 
@@ -37,8 +37,26 @@ export default function DebtorDetail() {
   const [protesting, setProtesting]   = useState(false);
   const [testingStep, setTestingStep] = useState('');
   const [testPreview, setTestPreview] = useState('');
+  const chatRef   = useRef(null);
+  const pollRef   = useRef(null);
+  const countRef  = useRef(0); // rastreia nº de mensagens para detectar novidades
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    load();
+    // Atualiza a conversa automaticamente a cada 5s
+    pollRef.current = setInterval(async () => {
+      try {
+        const d = await api.debtor(id);
+        setData((prev) => {
+          if (!prev) return d;
+          // Só atualiza se chegou mensagem nova
+          if (d.messages.length !== prev.messages.length) return d;
+          return prev;
+        });
+      } catch {}
+    }, 5000);
+    return () => clearInterval(pollRef.current);
+  }, [id]);
 
   async function load() {
     try { setData(await api.debtor(id)); }
@@ -114,6 +132,11 @@ export default function DebtorDetail() {
     load();
   }
 
+  // Scroll para o fim quando chegam novas mensagens
+  useEffect(() => {
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  }, [data?.messages?.length]);
+
   if (error) return <div className="error">{error}</div>;
   if (!data) return <p>Carregando...</p>;
   const { debtor, messages, deals, payments, dunningSteps = [] } = data;
@@ -179,7 +202,7 @@ export default function DebtorDetail() {
 
       <div className="panel">
         <h3>Conversa WhatsApp</h3>
-        <div className="chat">
+        <div className="chat" ref={chatRef} style={{ maxHeight: 400, overflowY: 'auto' }}>
           {messages.length === 0 && <p style={{ color: 'var(--muted)' }}>Nenhuma mensagem ainda.</p>}
           {messages.map((m) => (
             <div key={m.id} className={`msg ${m.direction}`}>

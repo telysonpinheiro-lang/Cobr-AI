@@ -60,7 +60,9 @@ app.use(cors({
 }));
 
 // ─── Body Parsing ────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '1mb' })); // reduzido de 5mb para 1mb
+// Webhook da Evolution pode enviar payloads grandes (imagens em base64)
+app.use('/api/webhook', express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // ─── Rate Limiting Global ────────────────────────────────────────────────────
 app.use('/api/', apiLimiter);
