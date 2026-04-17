@@ -74,6 +74,24 @@ async function runMigrations() {
       console.log('[migrate] dunning_log.step +pre');
     }
 
+    // Status em_protesto para devedores encaminhados para jurídico
+    const [[statusCol]] = await pool.query(`
+      SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME   = 'debtors'
+         AND COLUMN_NAME  = 'status'
+    `);
+    if (statusCol && !String(statusCol.COLUMN_TYPE).includes("'em_protesto'")) {
+      await pool.query(`
+        ALTER TABLE debtors
+          MODIFY COLUMN status ENUM(
+            'nao_contatado','em_conversa','negociando',
+            'aguardando_pagamento','pago','ignorado','em_protesto'
+          ) DEFAULT 'nao_contatado'
+      `);
+      console.log('[migrate] debtors.status +em_protesto');
+    }
+
     // Data prometida de pagamento (capturada na conversa D+2)
     await ensureColumn('debtors', 'promised_date',
       `promised_date DATE NULL DEFAULT NULL`);

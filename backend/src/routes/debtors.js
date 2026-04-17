@@ -96,7 +96,11 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const [payments] = await pool.query(
     'SELECT * FROM payments WHERE debtor_id = ? ORDER BY created_at DESC', [debtor.id]
   );
-  res.json({ debtor, messages, deals, payments });
+  const [dunningLog] = await pool.query(
+    'SELECT step FROM dunning_log WHERE debtor_id = ?', [debtor.id]
+  );
+  const dunningSteps = dunningLog.map((r) => r.step);
+  res.json({ debtor, messages, deals, payments, dunningSteps });
 }));
 
 // CRIAR (avulso)
@@ -158,10 +162,44 @@ router.patch('/:id/phone', asyncHandler(async (req, res) => {
   }
 }));
 
+// ENVIAR PARA PROTESTO / JURÍDICO
+router.post('/:id/protest', asyncHandler(async (req, res) => {
+  const [[debtor]] = await pool.query(
+    'SELECT * FROM debtors WHERE id = ? AND company_id = ?',
+    [req.params.id, req.user.companyId]
+  );
+  if (!debtor) return res.status(404).json({ error: 'não encontrado' });
+
+  const blocked = ['pago', 'em_protesto'];
+  if (blocked.includes(debtor.status)) {
+    return res.status(400).json({ error: `Devedor já está com status "${debtor.status}"` });
+  }
+
+  const valor = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
+    .format(Number(debtor.amount));
+  const venc  = String(debtor.due_date).slice(0, 10).split('-').reverse().join('/');
+
+  const msg = `⚠️ Prezado(a) ${debtor.name}, informamos que a dívida de ${valor} vencida em ${venc} está sendo encaminhada para tratamento jurídico por ausência de acordo. Para evitar maiores consequências, entre em contato imediatamente.`;
+
+  const companyConfig = await getCompanyConfig(req.user.companyId);
+  const { providerId } = await sendMessage({ to: debtor.phone, body: msg, companyConfig });
+
+  await pool.query(
+    'INSERT INTO messages (debtor_id, direction, body, provider_id) VALUES (?, "out", ?, ?)',
+    [debtor.id, msg, providerId]
+  );
+  await pool.query(
+    `UPDATE debtors SET status = 'em_protesto', last_contact_at = NOW() WHERE id = ?`,
+    [debtor.id]
+  );
+
+  res.json({ ok: true });
+}));
+
 // ATUALIZAR STATUS
 router.patch('/:id', asyncHandler(async (req, res) => {
   const { status } = req.body || {};
-  const allowed = ['nao_contatado','em_conversa','negociando','aguardando_pagamento','pago','ignorado'];
+  const allowed = ['nao_contatado','em_conversa','negociando','aguardando_pagamento','pago','ignorado','em_protesto'];
   if (!allowed.includes(status)) return res.status(400).json({ error: 'status inválido' });
   await pool.query(
     'UPDATE debtors SET status = ? WHERE id = ? AND company_id = ?',

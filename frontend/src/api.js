@@ -57,6 +57,7 @@ export const api = {
   sendMessage:  (id, body)        => request(`/api/debtors/${id}/send`, { method: 'POST', body: { body } }),
   createPayment:(id, amount)      => request(`/api/debtors/${id}/payment`, { method: 'POST', body: { amount } }),
   confirmPayment:(id, paymentId)  => request(`/api/debtors/${id}/payment/${paymentId}/confirm`, { method: 'POST' }),
+  sendToProtest: (id)             => request(`/api/debtors/${id}/protest`, { method: 'POST' }),
   // ── Admin ──────────────────────────────────────────────────────────────
   adminStats:         ()              => request('/api/admin/stats'),
   adminCompanies:     (params = {})   => {

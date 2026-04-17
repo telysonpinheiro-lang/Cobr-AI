@@ -27,13 +27,14 @@ function phoneDigits(v) { return v.replace(/\D/g, ''); }
 
 export default function DebtorDetail() {
   const { id } = useParams();
-  const [data, setData] = useState(null);
-  const [text, setText] = useState('');
-  const [error, setError] = useState('');
+  const [data, setData]             = useState(null);
+  const [text, setText]             = useState('');
+  const [error, setError]           = useState('');
   const [editingPhone, setEditingPhone] = useState(false);
-  const [newPhone, setNewPhone] = useState('');
+  const [newPhone, setNewPhone]     = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [phoneSaving, setPhoneSaving] = useState(false);
+  const [protesting, setProtesting] = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
@@ -79,6 +80,19 @@ export default function DebtorDetail() {
     load();
   }
 
+  async function sendToProtest() {
+    if (!window.confirm('Enviar notificação jurídica para este devedor?')) return;
+    setProtesting(true);
+    try {
+      await api.sendToProtest(id);
+      load();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setProtesting(false);
+    }
+  }
+
   async function confirm(paymentId) {
     await api.confirmPayment(id, paymentId);
     load();
@@ -86,7 +100,10 @@ export default function DebtorDetail() {
 
   if (error) return <div className="error">{error}</div>;
   if (!data) return <p>Carregando...</p>;
-  const { debtor, messages, deals, payments } = data;
+  const { debtor, messages, deals, payments, dunningSteps = [] } = data;
+
+  const canProtest = dunningSteps.includes('d3')
+    && !['pago', 'em_protesto', 'ignorado'].includes(debtor.status);
 
   return (
     <div>
@@ -168,6 +185,21 @@ export default function DebtorDetail() {
             Gerar PIX
           </button>
         </div>
+
+        {canProtest && (
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+            <button
+              onClick={sendToProtest}
+              disabled={protesting}
+              style={{ background: '#dc2626', color: '#fff', border: 'none' }}
+            >
+              {protesting ? 'Enviando...' : '⚖️ Enviar para protesto'}
+            </button>
+            <span style={{ marginLeft: 10, fontSize: 12, color: 'var(--muted)' }}>
+              Envia notificação de encaminhamento jurídico via WhatsApp
+            </span>
+          </div>
+        )}
       </div>
 
       {deals.length > 0 && (
