@@ -78,8 +78,11 @@ app.use('/api/admin',   adminRoutes);
 
 const { authRequired, superAdminRequired } = require('./middleware/auth');
 
-// Gatilho manual da régua — apenas super admins
-app.post('/api/scheduler/run', authRequired, superAdminRequired, async (_, res) => {
+// Gatilho manual da régua — super admins e owners
+app.post('/api/scheduler/run', authRequired, async (req, res) => {
+  if (!req.user?.isSuperAdmin && req.user?.role !== 'owner') {
+    return res.status(403).json({ error: 'apenas owner ou super admin' });
+  }
   try {
     const r = await runDunningOnce();
     res.json(r);

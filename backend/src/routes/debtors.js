@@ -162,6 +162,38 @@ router.patch('/:id/phone', asyncHandler(async (req, res) => {
   }
 }));
 
+// TESTAR ETAPA DA RÉGUA (sem verificar datas nem dunning_log)
+router.post('/:id/test-step', asyncHandler(async (req, res) => {
+  const { step } = req.body || {};
+  const validSteps = ['pre', 'd1', 'd2', 'd3'];
+  if (!validSteps.includes(step)) {
+    return res.status(400).json({ error: `step inválido — use: ${validSteps.join(', ')}` });
+  }
+
+  const [[debtor]] = await pool.query(
+    'SELECT * FROM debtors WHERE id = ? AND company_id = ?',
+    [req.params.id, req.user.companyId]
+  );
+  if (!debtor) return res.status(404).json({ error: 'não encontrado' });
+
+  const [[settings]] = await pool.query(
+    'SELECT * FROM settings WHERE company_id = ?', [req.user.companyId]
+  );
+  const effectiveSettings = settings || { tone: 'amigavel', max_discount: 20, max_installments: 6 };
+  const companyConfig = await getCompanyConfig(req.user.companyId);
+
+  const { generateOpeningMessage } = require('../services/ai');
+  const { reply } = await generateOpeningMessage({ debtor, settings: effectiveSettings, step, companyConfig });
+  const { providerId } = await sendMessage({ to: debtor.phone, body: reply, companyConfig });
+
+  await pool.query(
+    'INSERT INTO messages (debtor_id, direction, body, provider_id) VALUES (?, "out", ?, ?)',
+    [debtor.id, reply, providerId]
+  );
+
+  res.json({ ok: true, step, preview: reply });
+}));
+
 // ENVIAR PARA PROTESTO / JURÍDICO
 router.post('/:id/protest', asyncHandler(async (req, res) => {
   const [[debtor]] = await pool.query(

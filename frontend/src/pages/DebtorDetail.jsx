@@ -34,7 +34,9 @@ export default function DebtorDetail() {
   const [newPhone, setNewPhone]     = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [phoneSaving, setPhoneSaving] = useState(false);
-  const [protesting, setProtesting] = useState(false);
+  const [protesting, setProtesting]   = useState(false);
+  const [testingStep, setTestingStep] = useState('');
+  const [testPreview, setTestPreview] = useState('');
 
   useEffect(() => { load(); }, [id]);
 
@@ -78,6 +80,20 @@ export default function DebtorDetail() {
   async function generatePayment() {
     await api.createPayment(id);
     load();
+  }
+
+  async function runTestStep(step) {
+    setTestingStep(step);
+    setTestPreview('');
+    try {
+      const r = await api.testStep(id, step);
+      setTestPreview(r.preview);
+      load();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setTestingStep('');
+    }
   }
 
   async function sendToProtest() {
@@ -198,6 +214,41 @@ export default function DebtorDetail() {
             <span style={{ marginLeft: 10, fontSize: 12, color: 'var(--muted)' }}>
               Envia notificação de encaminhamento jurídico via WhatsApp
             </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Painel de testes da régua ────────────────────────── */}
+      <div className="panel" style={{ borderLeft: '3px solid #f59e0b' }}>
+        <h3 style={{ color: '#92400e' }}>🧪 Testar régua de cobrança</h3>
+        <p style={{ color: 'var(--muted)', fontSize: 13, marginTop: 0 }}>
+          Dispara a mensagem de cada etapa agora, independente de datas. Use para validar os textos.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { step: 'pre', label: 'D-1 Lembrete' },
+            { step: 'd1',  label: 'D+1 1ª abordagem' },
+            { step: 'd2',  label: 'D+2 Follow-up' },
+            { step: 'd3',  label: 'D+3 Oferta final' },
+          ].map(({ step, label }) => (
+            <button
+              key={step}
+              className="secondary"
+              disabled={!!testingStep}
+              onClick={() => runTestStep(step)}
+              style={{ fontSize: 13 }}
+            >
+              {testingStep === step ? 'Enviando...' : `Enviar ${label}`}
+            </button>
+          ))}
+        </div>
+        {testPreview && (
+          <div style={{
+            marginTop: 12, padding: 12,
+            background: '#fefce8', border: '1px solid #fde68a', borderRadius: 6,
+            fontSize: 13, whiteSpace: 'pre-wrap',
+          }}>
+            <strong>Mensagem enviada:</strong><br />{testPreview}
           </div>
         )}
       </div>
