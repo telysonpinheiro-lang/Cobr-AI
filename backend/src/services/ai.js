@@ -78,8 +78,12 @@ const OPENING_PROMPTS = {
     return `Gere uma mensagem de lembrete amigável para ${debtor.name}. O pagamento de R$ ${amount} vence *amanhã* (${fmtDate(debtor.due_date)}). Seja cordial e positivo — apenas um lembrete, sem cobrar, sem mencionar desconto ou atraso.`;
   },
   d1: (debtor) => {
-    const amount = Number(debtor.amount).toFixed(2);
-    return `Gere a primeira mensagem de cobrança para ${debtor.name}. A parcela de R$ ${amount} venceu em ${fmtDate(debtor.due_date)}. Informe o vencimento de forma amigável e pergunte como pode ajudar a regularizar. Não ofereça desconto nem parcelamento.`;
+    const amount  = Number(debtor.amount).toFixed(2);
+    const overdue = daysOverdue(debtor.due_date);
+    const quando  = overdue === 0 ? 'vence hoje'
+                  : overdue === 1 ? 'venceu ontem'
+                  : `venceu em ${fmtDate(debtor.due_date)}`;
+    return `Gere a primeira mensagem de cobrança para ${debtor.name}. A parcela de R$ ${amount} ${quando}. Informe isso de forma amigável e pergunte como pode ajudar a regularizar. Não ofereça desconto nem parcelamento.`;
   },
   d2: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2);
@@ -200,8 +204,12 @@ const FALLBACK_OPENINGS = {
     return `Olá, ${debtor.name}! 😊 Passando para lembrar que seu pagamento de R$ ${amount} vence *amanhã* (${fmtDate(debtor.due_date)}). Qualquer dúvida, estamos à disposição!`;
   },
   d1: (debtor) => {
-    const amount = Number(debtor.amount).toFixed(2).replace('.', ',');
-    return `Olá, ${debtor.name}! Sua parcela no valor de R$ ${amount} venceu em ${fmtDate(debtor.due_date)}. Podemos te ajudar a regularizar agora?`;
+    const amount  = Number(debtor.amount).toFixed(2).replace('.', ',');
+    const overdue = daysOverdue(debtor.due_date);
+    const quando  = overdue === 0 ? 'vence hoje'
+                  : overdue === 1 ? 'venceu ontem'
+                  : `venceu em ${fmtDate(debtor.due_date)}`;
+    return `Olá, ${debtor.name}! Sua parcela no valor de R$ ${amount} ${quando}. Podemos te ajudar a regularizar agora?`;
   },
   d2: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2).replace('.', ',');

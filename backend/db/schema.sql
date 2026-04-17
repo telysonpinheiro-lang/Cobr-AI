@@ -44,7 +44,7 @@ CREATE TABLE `settings` (
   `tone` ENUM('formal','amigavel','firme') DEFAULT 'amigavel',
   `max_discount` DECIMAL(5,2) DEFAULT 20.00,
   `max_installments` INT DEFAULT 6,
-  `dunning_d1` INT DEFAULT 1,
+  `dunning_d1` INT DEFAULT 0,
   `dunning_d2` INT DEFAULT 3,
   `dunning_d3` INT DEFAULT 7,
   `send_window_start` TIME DEFAULT '09:00:00',
