@@ -28,6 +28,36 @@ async function runDunningOnce() {
       const endH   = parseInt(String(settings.send_window_end).slice(0, 2), 10);
       if (hour < startH || hour >= endH) continue;
 
+      // ── Lembrete pré-vencimento (D-1) ─────────────────────────
+      const [preDebtors] = await pool.query(
+        `SELECT d.* FROM debtors d
+          LEFT JOIN dunning_log l ON l.debtor_id = d.id AND l.step = 'pre'
+         WHERE d.company_id = ?
+           AND d.status NOT IN ('pago','ignorado')
+           AND DATEDIFF(d.due_date, CURDATE()) = 1
+           AND l.id IS NULL
+         LIMIT 50`,
+        [company.id]
+      );
+      for (const debtor of preDebtors) {
+        try {
+          const { reply } = await generateOpeningMessage({
+            debtor, settings, step: 'pre', companyConfig,
+          });
+          const { providerId } = await sendMessage({ to: debtor.phone, body: reply, companyConfig });
+          await pool.query(
+            'INSERT INTO messages (debtor_id, direction, body, provider_id) VALUES (?, "out", ?, ?)',
+            [debtor.id, reply, providerId]
+          );
+          await pool.query('INSERT INTO dunning_log (debtor_id, step) VALUES (?, "pre")', [debtor.id]);
+          totalSent++;
+        } catch (err) {
+          totalErrors++;
+          console.error('[scheduler] erro lembrete pre debtor', debtor.id, err.message);
+        }
+      }
+
+      // ── Régua pós-vencimento (D+1, D+2, D+3) ──────────────────
       const steps = [
         { key: 'd1', days: settings.dunning_d1 },
         { key: 'd2', days: settings.dunning_d2 },

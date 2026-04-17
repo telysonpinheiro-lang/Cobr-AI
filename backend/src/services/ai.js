@@ -52,6 +52,10 @@ Esse JSON é processado automaticamente — não o repita fora das tags.`;
 
 // Prompts específicos por etapa da régua de cobrança
 const OPENING_PROMPTS = {
+  pre: (debtor, settings) => {
+    const amount = Number(debtor.amount).toFixed(2);
+    return `Gere uma mensagem de lembrete amigável para ${debtor.name}. O vencimento da dívida de R$ ${amount} é *amanhã* (${fmtDate(debtor.due_date)}). Seja cordial e positivo — é apenas um lembrete, não uma cobrança. Mencione o valor e a data. Não ofereça desconto nem mencione atraso.`;
+  },
   d1: (debtor, settings) => {
     const amount = Number(debtor.amount).toFixed(2);
     return `Gere a primeira mensagem de cobrança para ${debtor.name}. A dívida de R$ ${amount} venceu em ${fmtDate(debtor.due_date)}. Aborde de forma amigável, informe o valor e pergunte como pode ajudar a regularizar. Não ofereça desconto nesta primeira mensagem.`;
@@ -87,6 +91,10 @@ function fallbackReply(debtor, settings, lastUserMsg) {
   }
   if (/nao|não|agora não|depois|amanhã|amanha/.test(text)) {
     return `Entendo! Quando seria um bom momento? Temos opções de parcelamento e desconto para quem regulariza essa semana.`;
+  }
+  if (/lembrete|amanhã|vencimento|vence/.test(text)) {
+    const amount = Number(debtor.amount).toFixed(2);
+    return `Olá, ${debtor.name}! Só passando para lembrar que seu pagamento de R$ ${amount} vence amanhã (${fmtDate(debtor.due_date)}). Qualquer dúvida, estamos à disposição!`;
   }
   const amount = Number(debtor.amount).toFixed(2);
   return `Olá, ${debtor.name}! Identificamos um valor de R$ ${amount} em aberto desde ${fmtDate(debtor.due_date)}. Podemos resolver isso agora — prefere pagar à vista com desconto ou parcelar?`;

@@ -59,6 +59,21 @@ async function runMigrations() {
     await ensureColumn('users', 'is_super_admin',
       `is_super_admin TINYINT(1) DEFAULT 0`);
 
+    // Adiciona step 'pre' (lembrete pré-vencimento) ao enum do dunning_log
+    const [[enumRow]] = await pool.query(`
+      SELECT COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME   = 'dunning_log'
+         AND COLUMN_NAME  = 'step'
+    `);
+    if (enumRow && !String(enumRow.COLUMN_TYPE).includes("'pre'")) {
+      await pool.query(`
+        ALTER TABLE dunning_log
+          MODIFY COLUMN step ENUM('pre','d1','d2','d3') NOT NULL
+      `);
+      console.log('[migrate] dunning_log.step +pre');
+    }
+
     // Chave PIX da empresa (para geração de links de pagamento)
     await ensureColumn('companies', 'pix_key_type',
       `pix_key_type ENUM('cpf','cnpj','email','telefone','aleatoria') DEFAULT NULL`);
