@@ -4,6 +4,25 @@
 //   URL: POST http://SEU-BACKEND:4000/api/webhook/whatsapp
 //   Eventos: messages.upsert
 
+const PIX_TYPE_LABELS = {
+  cpf:       'CPF',
+  cnpj:      'CNPJ',
+  email:     'E-mail',
+  telefone:  'Telefone',
+  aleatoria: 'Chave aleatória',
+};
+
+// Monta a mensagem com a chave PIX configurada ou cai no link do gateway
+function buildPaymentMessage(reply, finalAmount, charge, companyConfig) {
+  const { pixKey, pixKeyType } = companyConfig?.payment || {};
+  if (pixKey) {
+    const typeLabel = PIX_TYPE_LABELS[pixKeyType] || 'Chave PIX';
+    const valor = `R$ ${Number(finalAmount).toFixed(2).replace('.', ',')}`;
+    return `${reply}\n\n💰 *Dados para pagamento via PIX*\n${typeLabel}: *${pixKey}*\nValor: *${valor}*\n\nApós o pagamento, envie o comprovante aqui.`;
+  }
+  return `${reply}\n\nSegue o link para pagamento: ${charge.link}`;
+}
+
 const express = require('express');
 const pool = require('../config/db');
 const { generateReply } = require('../services/ai');
@@ -149,7 +168,7 @@ router.post('/whatsapp', webhookLimiter, async (req, res) => {
           [debtor.id]
         );
 
-        const replyWithLink = `${reply}\n\nSegue o PIX: ${charge.link}`;
+        const replyWithLink = buildPaymentMessage(reply, finalAmount, charge, companyConfig);
         const sent = await sendMessage({ to: debtor.phone, body: replyWithLink, companyConfig });
         await pool.query(
           'INSERT INTO messages (debtor_id, direction, body, provider_id) VALUES (?, "out", ?, ?)',

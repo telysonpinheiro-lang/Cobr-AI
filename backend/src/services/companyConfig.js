@@ -24,7 +24,9 @@ async function getCompanyConfig(companyId) {
       evolutionInstance:c.evolution_instance   || process.env.EVOLUTION_INSTANCE   || '',
     },
     payment: {
-      provider: c.payment_provider || process.env.PAYMENT_PROVIDER || 'mock',
+      provider:   c.payment_provider || process.env.PAYMENT_PROVIDER || 'mock',
+      pixKeyType: c.pix_key_type || null,
+      pixKey:     c.pix_key     || null,
     },
     ai: {
       apiKey: c.openai_api_key || process.env.OPENAI_API_KEY || '',

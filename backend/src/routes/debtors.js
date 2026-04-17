@@ -261,7 +261,12 @@ router.post('/:id/payment', asyncHandler(async (req, res) => {
     `UPDATE debtors SET status = 'aguardando_pagamento' WHERE id = ?`, [debtor.id]
   );
 
-  const msg = `Aqui está seu link de pagamento (${method.toUpperCase()}): ${charge.link}`;
+  const { pixKey, pixKeyType } = companyConfig?.payment || {};
+  const PIX_LABELS = { cpf:'CPF', cnpj:'CNPJ', email:'E-mail', telefone:'Telefone', aleatoria:'Chave aleatória' };
+  const valor = `R$ ${value.toFixed(2).replace('.', ',')}`;
+  const msg = pixKey
+    ? `💰 *Dados para pagamento via PIX*\n${PIX_LABELS[pixKeyType] || 'Chave PIX'}: *${pixKey}*\nValor: *${valor}*\n\nApós o pagamento, envie o comprovante aqui.`
+    : `Aqui está seu link de pagamento (${method.toUpperCase()}): ${charge.link}`;
   const { providerId } = await sendMessage({ to: debtor.phone, body: msg, companyConfig });
   await pool.query(
     'INSERT INTO messages (debtor_id, direction, body, provider_id) VALUES (?, "out", ?, ?)',
