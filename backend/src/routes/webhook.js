@@ -93,29 +93,33 @@ router.post('/whatsapp', webhookLimiter, async (req, res) => {
     const { phone, body, instance } = parsed;
     const debtor = await findDebtor(phone, instance);
 
-    if (!debtor) {
-      // Não loga o telefone completo para proteger dados pessoais nos logs
-      return res.json({ ok: true, ignored: true });
-    }
+    if (!debtor) return res.json({ ok: true, ignored: true });
+
+    // Devedor já pagou — não processa mais mensagens
+    if (debtor.status === 'pago') return res.json({ ok: true, ignored: true });
 
     const [[settings]] = await pool.query(
       'SELECT * FROM settings WHERE company_id = ?', [debtor.company_id]
     );
+    // Guard: usa defaults se empresa não tiver settings configurado
+    const effectiveSettings = settings || { tone: 'amigavel', max_discount: 20, max_installments: 6 };
+
     const companyConfig = await getCompanyConfig(debtor.company_id);
 
-    // grava mensagem recebida
+    // Busca histórico ANTES de salvar a nova mensagem para evitar duplicação no contexto da IA
+    const [history] = await pool.query(
+      'SELECT direction, body FROM messages WHERE debtor_id = ? ORDER BY created_at ASC LIMIT 29',
+      [debtor.id]
+    );
+
+    // Grava mensagem recebida
     await pool.query(
       'INSERT INTO messages (debtor_id, direction, body) VALUES (?, "in", ?)',
       [debtor.id, body]
     );
 
-    const [history] = await pool.query(
-      'SELECT direction, body FROM messages WHERE debtor_id = ? ORDER BY created_at ASC LIMIT 30',
-      [debtor.id]
-    );
-
     const { reply, deal } = await generateReply({
-      debtor, settings, history, lastUserMessage: body, companyConfig,
+      debtor, settings: effectiveSettings, history, lastUserMessage: body, companyConfig,
     });
 
     // Se a IA fechou um acordo, persiste e gera link de pagamento
@@ -124,14 +128,11 @@ router.post('/whatsapp', webhookLimiter, async (req, res) => {
       const installments = Number(deal.installments  || 1);
       const finalAmount  = Number(deal.final_amount);
 
-      // Valida que os valores estão em faixas razoáveis
       if (finalAmount <= 0 || finalAmount > 10_000_000) {
-        console.warn('[webhook] valor de acordo fora do intervalo permitido:', finalAmount);
-        return res.json({ ok: true });
-      }
-
-      if (discount <= Number(settings.max_discount) &&
-          installments <= Number(settings.max_installments)) {
+        console.warn('[webhook] valor de acordo fora do intervalo:', finalAmount);
+        // Envia a resposta normalmente sem processar o acordo inválido
+      } else if (discount <= Number(effectiveSettings.max_discount) &&
+                 installments <= Number(effectiveSettings.max_installments)) {
         const [d] = await pool.query(
           `INSERT INTO deals (debtor_id, original_amount, final_amount, discount_pct, installments, status)
            VALUES (?, ?, ?, ?, ?, 'aceito')`,
@@ -144,7 +145,8 @@ router.post('/whatsapp', webhookLimiter, async (req, res) => {
           [debtor.id, d.insertId, finalAmount, charge.provider, charge.providerId, charge.link]
         );
         await pool.query(
-          `UPDATE debtors SET status = 'aguardando_pagamento' WHERE id = ?`, [debtor.id]
+          `UPDATE debtors SET status = 'aguardando_pagamento', last_contact_at = NOW() WHERE id = ?`,
+          [debtor.id]
         );
 
         const replyWithLink = `${reply}\n\nSegue o PIX: ${charge.link}`;
@@ -157,14 +159,17 @@ router.post('/whatsapp', webhookLimiter, async (req, res) => {
       }
     }
 
-    // resposta normal
+    // Resposta normal — nunca regride status de negociação avançada
     const sent = await sendMessage({ to: debtor.phone, body: reply, companyConfig });
     await pool.query(
       'INSERT INTO messages (debtor_id, direction, body, provider_id) VALUES (?, "out", ?, ?)',
       [debtor.id, reply, sent.providerId]
     );
     await pool.query(
-      `UPDATE debtors SET status = 'negociando', last_contact_at = NOW() WHERE id = ?`,
+      `UPDATE debtors
+          SET status = IF(status IN ('nao_contatado','em_conversa'), 'negociando', status),
+              last_contact_at = NOW()
+        WHERE id = ?`,
       [debtor.id]
     );
 

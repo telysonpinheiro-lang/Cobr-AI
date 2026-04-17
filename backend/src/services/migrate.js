@@ -18,6 +18,17 @@ async function ensureColumn(table, column, definition) {
   }
 }
 
+async function ensureTable(name, ddl) {
+  const [rows] = await pool.query(
+    `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`, [name]
+  );
+  if (!rows.length) {
+    await pool.query(ddl);
+    console.log(`[migrate] +table ${name}`);
+  }
+}
+
 async function runMigrations() {
   try {
     // Billing + status + providers por empresa
@@ -47,6 +58,18 @@ async function runMigrations() {
     // Super admin (vê todas as empresas)
     await ensureColumn('users', 'is_super_admin',
       `is_super_admin TINYINT(1) DEFAULT 0`);
+
+    // Log de execuções do scheduler (observabilidade)
+    await ensureTable('scheduler_runs', `
+      CREATE TABLE scheduler_runs (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        total_sent  INT          DEFAULT 0,
+        total_errors INT         DEFAULT 0,
+        duration_ms INT          DEFAULT 0,
+        ran_at      TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ran_at (ran_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
   } catch (err) {
     console.error('[migrate] falhou:', err.message);
   }

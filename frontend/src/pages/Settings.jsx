@@ -8,15 +8,19 @@ const PROVIDERS = [
 ];
 
 export default function Settings() {
-  const [s, setS]             = useState(null);
-  const [msg, setMsg]         = useState('');
-  const [testMsg, setTestMsg] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [qrData, setQrData]   = useState(null);   // { base64, connected }
-  const [qrLoading, setQrLoading] = useState(false);
+  const [s, setS]                   = useState(null);
+  const [msg, setMsg]               = useState('');
+  const [testMsg, setTestMsg]       = useState('');
+  const [testing, setTesting]       = useState(false);
+  const [qrData, setQrData]         = useState(null);
+  const [qrLoading, setQrLoading]   = useState(false);
+  const [schedulerRuns, setSchedulerRuns] = useState([]);
   const pollRef = useRef(null);
 
-  useEffect(() => { api.getSettings().then(setS); }, []);
+  useEffect(() => {
+    api.getSettings().then(setS);
+    api.schedulerStatus().then((d) => setSchedulerRuns(d.runs || [])).catch(() => {});
+  }, []);
   useEffect(() => () => clearInterval(pollRef.current), []);
 
   function update(k, v) { setS({ ...s, [k]: v }); }
@@ -256,6 +260,39 @@ export default function Settings() {
               <br />Evento: <strong>messages.upsert</strong>
             </p>
           </>
+        )}
+      </div>
+
+      {/* ── Status do Scheduler ─────────────────────────────── */}
+      <div className="panel">
+        <h3>Régua de cobrança — últimas execuções</h3>
+        {schedulerRuns.length === 0 ? (
+          <p style={{ color: 'var(--muted)', fontSize: 13 }}>Nenhuma execução registrada ainda.</p>
+        ) : (
+          <table style={{ fontSize: 13, width: '100%' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>Quando</th>
+                <th style={{ textAlign: 'center' }}>Enviadas</th>
+                <th style={{ textAlign: 'center' }}>Erros</th>
+                <th style={{ textAlign: 'right' }}>Duração</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedulerRuns.map((r, i) => (
+                <tr key={i}>
+                  <td>{new Date(r.ran_at).toLocaleString('pt-BR')}</td>
+                  <td style={{ textAlign: 'center', color: r.total_sent > 0 ? '#16a34a' : 'inherit' }}>
+                    {r.total_sent}
+                  </td>
+                  <td style={{ textAlign: 'center', color: r.total_errors > 0 ? '#dc2626' : 'inherit' }}>
+                    {r.total_errors}
+                  </td>
+                  <td style={{ textAlign: 'right', color: 'var(--muted)' }}>{r.duration_ms}ms</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
 

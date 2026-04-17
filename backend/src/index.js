@@ -76,12 +76,28 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/admin',   adminRoutes);
 
-// gatilho manual da régua — apenas super admins
 const { authRequired, superAdminRequired } = require('./middleware/auth');
+
+// Gatilho manual da régua — apenas super admins
 app.post('/api/scheduler/run', authRequired, superAdminRequired, async (_, res) => {
   try {
     const r = await runDunningOnce();
     res.json(r);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Status das últimas execuções do scheduler — qualquer usuário autenticado
+app.get('/api/scheduler/status', authRequired, async (_, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT total_sent, total_errors, duration_ms, ran_at
+         FROM scheduler_runs
+        ORDER BY ran_at DESC
+        LIMIT 10`
+    );
+    res.json({ runs: rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -144,7 +144,7 @@ services:
       DATABASE_SAVE_DATA_CONTACTS: "true"
       DATABASE_SAVE_DATA_CHATS: "true"
       WEBHOOK_GLOBAL_URL: "http://backend:4000/api/webhook/whatsapp"
-      WEBHOOK_GLOBAL_ENABLED: "false"
+      WEBHOOK_GLOBAL_ENABLED: "true"
       CONFIG_SESSION_PHONE_CLIENT: "Cobr-AI"
       CONFIG_SESSION_PHONE_NAME: "Chrome"
       QRCODE_LIMIT: 30
