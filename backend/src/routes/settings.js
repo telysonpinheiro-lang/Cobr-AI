@@ -39,19 +39,24 @@ router.put('/', asyncHandler(async (req, res) => {
     'dunning_d1', 'dunning_d2', 'dunning_d3',
     'send_window_start', 'send_window_end',
   ];
+  const settingsCols   = [];
+  const settingsVals   = [];
   const settingsUpdates = [];
-  const settingsValues  = [];
   for (const k of settingsFields) {
     if (req.body[k] !== undefined) {
-      settingsUpdates.push(`${k} = ?`);
-      settingsValues.push(req.body[k]);
+      settingsCols.push(k);
+      settingsVals.push(req.body[k]);
+      settingsUpdates.push(`${k} = VALUES(${k})`);
     }
   }
-  if (settingsUpdates.length) {
-    settingsValues.push(req.user.companyId);
+  if (settingsCols.length) {
+    // UPSERT: cria a linha se não existir, atualiza se existir
+    const cols = ['company_id', ...settingsCols].join(', ');
+    const phs  = ['?', ...settingsCols.map(() => '?')].join(', ');
     await pool.query(
-      `UPDATE settings SET ${settingsUpdates.join(', ')} WHERE company_id = ?`,
-      settingsValues
+      `INSERT INTO settings (${cols}) VALUES (${phs})
+         ON DUPLICATE KEY UPDATE ${settingsUpdates.join(', ')}`,
+      [req.user.companyId, ...settingsVals]
     );
   }
 

@@ -102,6 +102,14 @@ async function runMigrations() {
     await ensureColumn('companies', 'pix_key',
       `pix_key VARCHAR(150) DEFAULT NULL`);
 
+    // Garante linha em settings para todas as empresas (evita falha no UPDATE)
+    await pool.query(`
+      INSERT INTO settings (company_id)
+      SELECT c.id FROM companies c
+        LEFT JOIN settings s ON s.company_id = c.id
+       WHERE s.company_id IS NULL
+    `);
+
     // Log de execuções do scheduler (observabilidade)
     await ensureTable('scheduler_runs', `
       CREATE TABLE scheduler_runs (
