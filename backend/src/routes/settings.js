@@ -144,4 +144,44 @@ router.post('/test-evolution', async (req, res) => {
   }
 });
 
+// GET /api/settings/evolution-qr/:instance — retorna QR code ou estado de conexão
+router.get('/evolution-qr/:instance', asyncHandler(async (req, res) => {
+  const [[company]] = await pool.query(
+    'SELECT evolution_base_url, evolution_api_key FROM companies WHERE id = ?',
+    [req.user.companyId]
+  );
+
+  const baseUrl  = (company?.evolution_base_url || process.env.EVOLUTION_BASE_URL || '').replace(/\/$/, '');
+  const apiKey   = company?.evolution_api_key   || process.env.EVOLUTION_API_KEY   || '';
+  const instance = req.params.instance;
+
+  if (!baseUrl || !apiKey || !instance) {
+    return res.status(400).json({ error: 'Configure base_url, api_key e instance primeiro' });
+  }
+
+  // Verificar estado atual
+  const stateR = await fetch(`${baseUrl}/instance/connectionState/${instance}`, {
+    headers: { apikey: apiKey },
+  });
+  const stateData = stateR.ok ? await stateR.json() : {};
+  const state = stateData.instance?.state || stateData.state || 'unknown';
+
+  if (state === 'open') {
+    // Já conectado — buscar número
+    const listR = await fetch(`${baseUrl}/instance/fetchInstances`, { headers: { apikey: apiKey } });
+    const list = listR.ok ? await listR.json() : [];
+    const found = Array.isArray(list) ? list.find(i => i.name === instance) : null;
+    return res.json({ connected: true, number: found?.number || null });
+  }
+
+  // Buscar QR code
+  const qrR = await fetch(`${baseUrl}/instance/connect/${instance}`, {
+    headers: { apikey: apiKey },
+  });
+  const qrData = qrR.ok ? await qrR.json() : {};
+  const base64 = qrData.base64 || null;
+
+  res.json({ connected: false, base64: base64 ? `data:image/png;base64,${base64.replace(/^data:image\/\w+;base64,/, '')}` : null });
+}));
+
 module.exports = router;

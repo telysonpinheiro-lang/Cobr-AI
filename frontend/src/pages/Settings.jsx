@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { api } from '../api.js';
 
 const PROVIDERS = [
@@ -8,12 +8,16 @@ const PROVIDERS = [
 ];
 
 export default function Settings() {
-  const [s, setS]           = useState(null);
-  const [msg, setMsg]       = useState('');
+  const [s, setS]             = useState(null);
+  const [msg, setMsg]         = useState('');
   const [testMsg, setTestMsg] = useState('');
   const [testing, setTesting] = useState(false);
+  const [qrData, setQrData]   = useState(null);   // { base64, connected }
+  const [qrLoading, setQrLoading] = useState(false);
+  const pollRef = useRef(null);
 
   useEffect(() => { api.getSettings().then(setS); }, []);
+  useEffect(() => () => clearInterval(pollRef.current), []);
 
   function update(k, v) { setS({ ...s, [k]: v }); }
 
@@ -37,6 +41,30 @@ export default function Settings() {
       setTestMsg('✗ ' + err.message);
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function loadQR() {
+    setQrLoading(true);
+    setQrData(null);
+    clearInterval(pollRef.current);
+    try {
+      const data = await api.evolutionQR(s.evolution_instance);
+      setQrData(data);
+      if (!data.connected) {
+        // Policia a cada 3s até conectar
+        pollRef.current = setInterval(async () => {
+          try {
+            const d = await api.evolutionQR(s.evolution_instance);
+            setQrData(d);
+            if (d.connected) clearInterval(pollRef.current);
+          } catch { clearInterval(pollRef.current); }
+        }, 3000);
+      }
+    } catch (err) {
+      setQrData({ error: err.message });
+    } finally {
+      setQrLoading(false);
     }
   }
 
@@ -166,6 +194,13 @@ export default function Settings() {
               >
                 {testing ? 'Testando...' : 'Testar conexão'}
               </button>
+              <button
+                onClick={loadQR}
+                disabled={qrLoading}
+                className="secondary"
+              >
+                {qrLoading ? 'Buscando...' : 'QR Code / Conectar WhatsApp'}
+              </button>
               {testMsg && (
                 <span style={{
                   color: testMsg.startsWith('✓') ? '#16a34a' : '#dc2626',
@@ -175,6 +210,43 @@ export default function Settings() {
                 </span>
               )}
             </div>
+
+            {/* ── QR Code ─────────────────────────────────────────── */}
+            {qrData && (
+              <div style={{ marginTop: 16, padding: 16, background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                {qrData.error && (
+                  <p style={{ color: '#dc2626' }}>Erro: {qrData.error}</p>
+                )}
+                {qrData.connected && (
+                  <p style={{ color: '#16a34a', fontWeight: 600 }}>
+                    ✓ WhatsApp conectado! Número: {qrData.number}
+                  </p>
+                )}
+                {!qrData.connected && !qrData.error && qrData.base64 && (
+                  <>
+                    <p style={{ fontWeight: 600, marginBottom: 8 }}>
+                      Escaneie com o WhatsApp do celular:
+                    </p>
+                    <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+                      WhatsApp → Dispositivos conectados → Conectar dispositivo → escanear QR
+                    </p>
+                    <img
+                      src={qrData.base64}
+                      alt="QR Code WhatsApp"
+                      style={{ width: 220, height: 220, display: 'block', borderRadius: 8 }}
+                    />
+                    <p style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>
+                      Aguardando escaneamento... (atualiza automaticamente)
+                    </p>
+                  </>
+                )}
+                {!qrData.connected && !qrData.error && !qrData.base64 && (
+                  <p style={{ color: '#d97706' }}>
+                    QR ainda sendo gerado — aguarde alguns segundos e tente novamente.
+                  </p>
+                )}
+              </div>
+            )}
 
             <p style={{ marginTop: 14, fontSize: 13, color: '#6b7280' }}>
               Configure o webhook da instância para:<br />

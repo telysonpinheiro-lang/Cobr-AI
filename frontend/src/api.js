@@ -81,5 +81,6 @@ export const api = {
   getSettings:   ()               => request('/api/settings'),
   saveSettings:  (data)           => request('/api/settings', { method: 'PUT', body: data }),
   testEvolution: (data)           => request('/api/settings/test-evolution', { method: 'POST', body: data }),
+  evolutionQR:   (instance)       => request(`/api/settings/evolution-qr/${encodeURIComponent(instance || '')}`),
   runScheduler:  ()               => request('/api/scheduler/run', { method: 'POST' }),
 };
