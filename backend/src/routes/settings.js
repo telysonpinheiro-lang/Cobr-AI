@@ -151,37 +151,47 @@ router.get('/evolution-qr/:instance', asyncHandler(async (req, res) => {
     [req.user.companyId]
   );
 
-  const baseUrl  = (company?.evolution_base_url || process.env.EVOLUTION_BASE_URL || '').replace(/\/$/, '');
-  const apiKey   = company?.evolution_api_key   || process.env.EVOLUTION_API_KEY   || '';
-  const instance = req.params.instance;
+  // Usa URL interna do Docker para comunicação backend→Evolution (mais rápida e confiável)
+  const internalUrl = (process.env.EVOLUTION_BASE_URL || 'http://evolution:8080').replace(/\/$/, '');
+  const apiKey      = company?.evolution_api_key || process.env.EVOLUTION_API_KEY || '';
+  const instance    = req.params.instance;
 
-  if (!baseUrl || !apiKey || !instance) {
-    return res.status(400).json({ error: 'Configure base_url, api_key e instance primeiro' });
+  if (!apiKey || !instance) {
+    return res.status(400).json({ error: 'Configure api_key e instance primeiro' });
   }
 
   // Verificar estado atual
-  const stateR = await fetch(`${baseUrl}/instance/connectionState/${instance}`, {
+  const stateR = await fetch(`${internalUrl}/instance/connectionState/${instance}`, {
     headers: { apikey: apiKey },
   });
-  const stateData = stateR.ok ? await stateR.json() : {};
+  if (!stateR.ok) {
+    return res.status(404).json({ error: `Instância "${instance}" não encontrada na Evolution API` });
+  }
+  const stateData = await stateR.json();
   const state = stateData.instance?.state || stateData.state || 'unknown';
 
   if (state === 'open') {
-    // Já conectado — buscar número
-    const listR = await fetch(`${baseUrl}/instance/fetchInstances`, { headers: { apikey: apiKey } });
+    const listR = await fetch(`${internalUrl}/instance/fetchInstances`, { headers: { apikey: apiKey } });
     const list = listR.ok ? await listR.json() : [];
     const found = Array.isArray(list) ? list.find(i => i.name === instance) : null;
     return res.json({ connected: true, number: found?.number || null });
   }
 
+  // Se fechada, reconectar antes de pegar QR
+  if (state === 'close') {
+    await fetch(`${internalUrl}/instance/connect/${instance}`, { headers: { apikey: apiKey } });
+    await new Promise(r => setTimeout(r, 2000));
+  }
+
   // Buscar QR code
-  const qrR = await fetch(`${baseUrl}/instance/connect/${instance}`, {
+  const qrR = await fetch(`${internalUrl}/instance/connect/${instance}`, {
     headers: { apikey: apiKey },
   });
   const qrData = qrR.ok ? await qrR.json() : {};
-  const base64 = qrData.base64 || null;
+  const raw = qrData.base64 || null;
+  const base64 = raw ? (raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`) : null;
 
-  res.json({ connected: false, base64: base64 ? `data:image/png;base64,${base64.replace(/^data:image\/\w+;base64,/, '')}` : null });
+  res.json({ connected: false, base64 });
 }));
 
 module.exports = router;
