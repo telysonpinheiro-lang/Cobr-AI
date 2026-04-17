@@ -41,9 +41,19 @@ function fileFilter(req, file, cb) {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // reduzido de 10MB para 5MB
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter,
 });
+
+// Normaliza e valida telefone BR. Retorna 11 dígitos (DDD + 9 + 8) ou lança erro.
+function normalizePhone(raw) {
+  let d = String(raw).replace(/\D/g, '');
+  if (d.startsWith('55') && d.length > 11) d = d.slice(2);
+  // Celular antigo: 10 dígitos, 3º dígito >= 6 → insere o 9
+  if (d.length === 10 && parseInt(d[2], 10) >= 6) d = d.slice(0, 2) + '9' + d.slice(2);
+  if (d.length !== 11) throw new Error('Telefone deve ter DDD + 9 dígitos. Ex: (11) 91234-5678');
+  return d;
+}
 
 // LISTAR
 router.get('/', asyncHandler(async (req, res) => {
@@ -95,8 +105,6 @@ router.post('/', async (req, res) => {
   if (!name || !phone || !amount || !due_date) {
     return res.status(400).json({ error: 'campos obrigatórios ausentes' });
   }
-
-  // Validações de tipo e faixa
   if (typeof name !== 'string' || name.trim().length < 2 || name.length > 200) {
     return res.status(400).json({ error: 'nome inválido' });
   }
@@ -109,11 +117,15 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'parcelas inválidas (1–360)' });
   }
 
+  let normalizedPhone;
+  try { normalizedPhone = normalizePhone(phone); }
+  catch (e) { return res.status(400).json({ error: e.message }); }
+
   try {
     const [r] = await pool.query(
       `INSERT INTO debtors (company_id, name, phone, amount, due_date, installments)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [req.user.companyId, name.trim(), phone, parsedAmount, due_date, parsedInstallments]
+      [req.user.companyId, name.trim(), normalizedPhone, parsedAmount, due_date, parsedInstallments]
     );
     res.json({ id: r.insertId });
   } catch (err) {
@@ -121,6 +133,30 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: 'erro ao criar devedor' });
   }
 });
+
+// ATUALIZAR TELEFONE
+router.patch('/:id/phone', asyncHandler(async (req, res) => {
+  const { phone } = req.body || {};
+  if (!phone) return res.status(400).json({ error: 'telefone obrigatório' });
+
+  let normalizedPhone;
+  try { normalizedPhone = normalizePhone(phone); }
+  catch (e) { return res.status(400).json({ error: e.message }); }
+
+  const [[debtor]] = await pool.query(
+    'SELECT id FROM debtors WHERE id = ? AND company_id = ?',
+    [req.params.id, req.user.companyId]
+  );
+  if (!debtor) return res.status(404).json({ error: 'não encontrado' });
+
+  try {
+    await pool.query('UPDATE debtors SET phone = ? WHERE id = ?', [normalizedPhone, debtor.id]);
+    res.json({ ok: true, phone: normalizedPhone });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'telefone já cadastrado para outro devedor' });
+    res.status(500).json({ error: 'erro ao atualizar telefone' });
+  }
+}));
 
 // ATUALIZAR STATUS
 router.patch('/:id', asyncHandler(async (req, res) => {

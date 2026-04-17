@@ -15,17 +15,56 @@ function formatPhone(p) {
     : `(${m[1]}) ${m[2]}-${m[3]}`;
 }
 
+function maskPhone(v) {
+  const d = v.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 2)  return d.length ? `(${d}` : '';
+  if (d.length <= 7)  return `(${d.slice(0,2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+}
+
+function phoneDigits(v) { return v.replace(/\D/g, ''); }
+
 export default function DebtorDetail() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [text, setText] = useState('');
   const [error, setError] = useState('');
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [newPhone, setNewPhone] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [phoneSaving, setPhoneSaving] = useState(false);
 
   useEffect(() => { load(); }, [id]);
 
   async function load() {
     try { setData(await api.debtor(id)); }
     catch (err) { setError(err.message); }
+  }
+
+  function startEditPhone() {
+    setNewPhone(formatPhone(data.debtor.phone));
+    setPhoneError('');
+    setEditingPhone(true);
+  }
+
+  async function savePhone() {
+    const digits = phoneDigits(newPhone);
+    if (digits.length < 11) {
+      setPhoneError('Digite DDD + 9 dígitos. Ex: (11) 91234-5678');
+      return;
+    }
+    setPhoneSaving(true);
+    setPhoneError('');
+    try {
+      await api.updatePhone(id, newPhone);
+      setEditingPhone(false);
+      load();
+    } catch (err) {
+      setPhoneError(err.message);
+    } finally {
+      setPhoneSaving(false);
+    }
   }
 
   async function send() {
@@ -57,7 +96,37 @@ export default function DebtorDetail() {
       <div className="cards">
         <div className="card">
           <div className="label">Telefone</div>
-          <div className="value" style={{ fontSize: 18 }}>{formatPhone(debtor.phone)}</div>
+          {editingPhone ? (
+            <div style={{ marginTop: 6 }}>
+              <input
+                style={{ fontSize: 16, width: '100%', marginBottom: 6 }}
+                value={newPhone}
+                onChange={(e) => setNewPhone(maskPhone(e.target.value))}
+                placeholder="(11) 91234-5678"
+                autoFocus
+              />
+              {phoneError && <div style={{ color: '#dc2626', fontSize: 12, marginBottom: 6 }}>{phoneError}</div>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={savePhone} disabled={phoneSaving} style={{ padding: '4px 12px', fontSize: 13 }}>
+                  {phoneSaving ? 'Salvando...' : 'Salvar'}
+                </button>
+                <button onClick={() => setEditingPhone(false)} className="secondary" style={{ padding: '4px 12px', fontSize: 13 }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="value" style={{ fontSize: 18 }}>{formatPhone(debtor.phone)}</span>
+              <button
+                onClick={startEditPhone}
+                className="secondary"
+                style={{ padding: '2px 10px', fontSize: 12, marginTop: 2 }}
+              >
+                Editar
+              </button>
+            </div>
+          )}
         </div>
         <div className="card warning">
           <div className="label">Valor</div>

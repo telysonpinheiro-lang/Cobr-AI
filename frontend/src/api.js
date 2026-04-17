@@ -48,6 +48,7 @@ export const api = {
   debtor:       (id)              => request(`/api/debtors/${id}`),
   createDebtor: (data)            => request('/api/debtors',       { method: 'POST', body: data }),
   updateStatus: (id, status)      => request(`/api/debtors/${id}`, { method: 'PATCH', body: { status } }),
+  updatePhone:  (id, phone)       => request(`/api/debtors/${id}/phone`, { method: 'PATCH', body: { phone } }),
   uploadDebtors:(file)            => {
     const fd = new FormData();
     fd.append('file', file);
