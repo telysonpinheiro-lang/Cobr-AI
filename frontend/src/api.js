@@ -33,6 +33,16 @@ async function request(path, opts = {}) {
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
+
+  // Token expirado/inválido: limpa sessão e manda para login
+  if (res.status === 401 && !path.includes('/auth/login')) {
+    clearSession();
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+    throw new Error('Sessão expirada — faça login novamente');
+  }
+
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
