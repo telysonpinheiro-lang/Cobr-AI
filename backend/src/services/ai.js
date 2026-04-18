@@ -49,7 +49,7 @@ ${Number(settings.max_discount) > 0
   ? `- Desconto de ${settings.max_discount}% SOMENTE para quitação à vista do valor total → R$ ${discountedAmount.toFixed(2)}`
   : '- Desconto: NÃO disponível'}
 ${Number(settings.max_installments) > 1
-  ? `- Parcelamento em até ${installments}x de R$ ${parcela.toFixed(2)} sem acréscimo (SEM desconto)`
+  ? `- Parcelamento em até ${installments}x de R$ ${parcela.toFixed(2)} no cartão de crédito, sem juros e sem desconto`
   : '- Parcelamento: NÃO disponível'}
 - Nunca ofereça desconto junto com parcelamento
 - Nunca ofereça opção que não esteja disponível acima
@@ -90,18 +90,19 @@ const OPENING_PROMPTS = {
     const promiseCtx      = debtor.promised_date
       ? `O cliente havia prometido pagar em ${fmtDate(debtor.promised_date)}, mas o pagamento não foi identificado. `
       : '';
-    const hasDiscount     = Number(settings.max_discount) > 0;
+    const discPct         = Number(settings.max_discount);
+    const hasDiscount     = discPct > 0;
     const hasInstallments = Number(settings.max_installments) > 1;
 
     const opts = [];
     if (hasDiscount) {
-      const discounted = +(debtor.amount * (1 - settings.max_discount / 100)).toFixed(2);
-      opts.push(`quitar o valor total hoje com ${settings.max_discount}% de desconto por R$ ${discounted.toFixed(2)}`);
+      const discounted = +(debtor.amount * (1 - discPct / 100)).toFixed(2);
+      opts.push(`quitar o valor total hoje com ${discPct}% de desconto por R$ ${discounted.toFixed(2)}`);
     }
     if (hasInstallments) {
       const n       = Number(settings.max_installments);
       const parcela = +(debtor.amount / n).toFixed(2);
-      opts.push(`parcelar em ${n}x de R$ ${parcela.toFixed(2)} sem juros e sem desconto`);
+      opts.push(`parcelar em ${n}x de R$ ${parcela.toFixed(2)} sem juros no cartão de crédito`);
     }
 
     if (opts.length === 0) {
@@ -125,7 +126,7 @@ function fallbackReply(debtor, settings, lastUserMsg) {
   if (/parcel|dividir|vezes|prestação/.test(text)) {
     const n      = Math.min(Number(settings.max_installments) || 3, 6);
     const parcela = +(debtor.amount / n).toFixed(2);
-    return `Posso parcelar em ${n}x de R$ ${parcela.toFixed(2)} sem juros. Fechamos assim? <acordo>{"final_amount": ${Number(debtor.amount).toFixed(2)}, "discount_pct": 0, "installments": ${n}}</acordo>`;
+    return `Posso parcelar em ${n}x de R$ ${parcela.toFixed(2)} sem juros no cartão de crédito. Fechamos assim? <acordo>{"final_amount": ${Number(debtor.amount).toFixed(2)}, "discount_pct": 0, "installments": ${n}}</acordo>`;
   }
   if (/quando|prazo|data|semana|mês|dia \d/.test(text)) {
     return `Qual data seria melhor para você realizar o pagamento? Assim que me confirmar, reservo as condições especiais até lá.`;
@@ -212,18 +213,19 @@ const FALLBACK_OPENINGS = {
     const promiseCtx  = debtor.promised_date
       ? `Você havia prometido pagar em ${fmtDate(debtor.promised_date)}, mas não identificamos o pagamento. `
       : '';
-    const hasDiscount     = Number(settings.max_discount) > 0;
+    const discPct         = Number(settings.max_discount);
+    const hasDiscount     = discPct > 0;
     const hasInstallments = Number(settings.max_installments) > 1;
 
     const options = [];
     if (hasDiscount) {
-      const discounted = (debtor.amount * (1 - settings.max_discount / 100)).toFixed(2).replace('.', ',');
-      options.push(`quitar hoje com ${settings.max_discount}% de desconto por R$ ${discounted}`);
+      const discounted = (debtor.amount * (1 - discPct / 100)).toFixed(2).replace('.', ',');
+      options.push(`quitar hoje com ${discPct}% de desconto por R$ ${discounted}`);
     }
     if (hasInstallments) {
       const n       = Number(settings.max_installments);
       const parcela = (debtor.amount / n).toFixed(2).replace('.', ',');
-      options.push(`parcelar em ${n}x de R$ ${parcela} sem juros`);
+      options.push(`parcelar em ${n}x de R$ ${parcela} sem juros no cartão`);
     }
 
     if (options.length === 0) {
