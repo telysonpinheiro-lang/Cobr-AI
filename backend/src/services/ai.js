@@ -29,9 +29,10 @@ function buildSystemPrompt(settings, debtor) {
   const tone             = TONES[settings.tone] || TONES.amigavel;
   const overdue          = daysOverdue(debtor.due_date);
   const amount           = Number(debtor.amount).toFixed(2);
-  const discountedAmount = +(debtor.amount * (1 - settings.max_discount / 100)).toFixed(2);
+  const totalDebt        = (Number(debtor.amount) * (Number(debtor.installments) || 1)).toFixed(2);
+  const discountedAmount = +(Number(totalDebt) * (1 - settings.max_discount / 100)).toFixed(2);
   const installments     = Number(settings.max_installments) || 6;
-  const parcela          = +(debtor.amount / installments).toFixed(2);
+  const parcela          = +(Number(totalDebt) / installments).toFixed(2);
 
   return `Você é o assistente de cobrança do Cobr-AI — amigável, profissional e focado em resolver.
 Seu único objetivo é recuperar o pagamento em atraso de forma respeitosa.
@@ -56,10 +57,13 @@ ${Number(settings.max_installments) > 1
 
 CONTEXTO DO DEVEDOR:
 - Nome: ${debtor.name}
-- Valor em aberto: R$ ${amount}
+- Valor da parcela em aberto: R$ ${amount}
+- Valor TOTAL da dívida: R$ ${totalDebt} (${debtor.installments}x de R$ ${amount})
 - Vencimento: ${fmtDate(debtor.due_date)} (${overdue} dia${overdue !== 1 ? 's' : ''} em atraso)
-- Parcelamento original: ${debtor.installments}x
 ${debtor.promised_date ? `- Cliente prometeu pagar em: ${fmtDate(debtor.promised_date)}` : ''}
+
+Nas etapas D+1 e D+2 cobre apenas o valor da parcela vencida.
+Na etapa D+3 (oferta final) ofereça quitar/parcelar o valor TOTAL da dívida.
 
 QUANDO O CLIENTE ACEITAR UM ACORDO (desconto ou parcelamento):
 Responda naturalmente E inclua no final:
@@ -86,7 +90,9 @@ const OPENING_PROMPTS = {
     return `Gere um follow-up de cobrança para ${debtor.name}. Já enviamos contato sobre a dívida de R$ ${amount}. Seja cordial, mencione que ainda não houve retorno e pergunte qual seria a *melhor data* para que o cliente consiga realizar o pagamento. Não ofereça desconto nem parcelamento — apenas registre o compromisso de data. Hoje é ${todayISO()}.`;
   },
   d3: (debtor, settings) => {
-    const amount          = Number(debtor.amount).toFixed(2);
+    // D+3 opera sobre a dívida TOTAL (valor_parcela × parcelas)
+    const totalNumeric    = Number(debtor.amount) * (Number(debtor.installments) || 1);
+    const totalFmt        = totalNumeric.toFixed(2);
     const promiseCtx      = debtor.promised_date
       ? `O cliente havia prometido pagar em ${fmtDate(debtor.promised_date)}, mas o pagamento não foi identificado. `
       : '';
@@ -96,20 +102,20 @@ const OPENING_PROMPTS = {
 
     const opts = [];
     if (hasDiscount) {
-      const discounted = +(debtor.amount * (1 - discPct / 100)).toFixed(2);
+      const discounted = +(totalNumeric * (1 - discPct / 100)).toFixed(2);
       opts.push(`quitar o valor total hoje com ${discPct}% de desconto por R$ ${discounted.toFixed(2)}`);
     }
     if (hasInstallments) {
       const n       = Number(settings.max_installments);
-      const parcela = +(debtor.amount / n).toFixed(2);
+      const parcela = +(totalNumeric / n).toFixed(2);
       opts.push(`parcelar em ${n}x de R$ ${parcela.toFixed(2)} sem juros no cartão de crédito`);
     }
 
     if (opts.length === 0) {
-      return `Gere a mensagem final de cobrança para ${debtor.name}. ${promiseCtx}A dívida de R$ ${amount} precisa ser regularizada. Seja firme e objetivo, pedindo que entre em contato imediatamente.`;
+      return `Gere a mensagem final de cobrança para ${debtor.name}. ${promiseCtx}A dívida total de R$ ${totalFmt} precisa ser regularizada. Seja firme e objetivo, pedindo que entre em contato imediatamente.`;
     }
     const optsText = opts.map((o, i) => `(${i + 1}) ${o}`).join('; ou ');
-    return `Gere a mensagem final de cobrança para ${debtor.name}. ${promiseCtx}A dívida é de R$ ${amount}. Ofereça apenas as seguintes opções: ${optsText}. Seja firme e objetivo.`;
+    return `Gere a mensagem final de cobrança para ${debtor.name}. ${promiseCtx}A dívida total é de R$ ${totalFmt}. Ofereça apenas as seguintes opções: ${optsText}. Seja firme e objetivo.`;
   },
 };
 
@@ -209,8 +215,10 @@ const FALLBACK_OPENINGS = {
     return `Olá, ${debtor.name}! Ainda não tivemos retorno sobre a dívida de R$ ${amount} vencida em ${fmtDate(debtor.due_date)}. Qual seria a melhor data para você realizar o pagamento?`;
   },
   d3: (debtor, settings) => {
-    const amount      = Number(debtor.amount).toFixed(2).replace('.', ',');
-    const promiseCtx  = debtor.promised_date
+    // D+3 (oferta final) opera sobre o valor TOTAL da dívida, não sobre a parcela
+    const totalNumeric = Number(debtor.amount) * (Number(debtor.installments) || 1);
+    const totalFmt     = totalNumeric.toFixed(2).replace('.', ',');
+    const promiseCtx   = debtor.promised_date
       ? `Você havia prometido pagar em ${fmtDate(debtor.promised_date)}, mas não identificamos o pagamento. `
       : '';
     const discPct         = Number(settings.max_discount);
@@ -219,22 +227,22 @@ const FALLBACK_OPENINGS = {
 
     const options = [];
     if (hasDiscount) {
-      const discounted = (debtor.amount * (1 - discPct / 100)).toFixed(2).replace('.', ',');
+      const discounted = (totalNumeric * (1 - discPct / 100)).toFixed(2).replace('.', ',');
       options.push(`quitar hoje com ${discPct}% de desconto por R$ ${discounted}`);
     }
     if (hasInstallments) {
       const n       = Number(settings.max_installments);
-      const parcela = (debtor.amount / n).toFixed(2).replace('.', ',');
+      const parcela = (totalNumeric / n).toFixed(2).replace('.', ',');
       options.push(`parcelar em ${n}x de R$ ${parcela} sem juros no cartão`);
     }
 
     if (options.length === 0) {
-      return `${debtor.name}, ${promiseCtx}a dívida de R$ ${amount} precisa ser regularizada o quanto antes. Entre em contato para resolvermos juntos.`;
+      return `${debtor.name}, ${promiseCtx}a dívida total de R$ ${totalFmt} precisa ser regularizada o quanto antes. Entre em contato para resolvermos juntos.`;
     }
     if (options.length === 1) {
-      return `${debtor.name}, ${promiseCtx}ainda podemos resolver a dívida de R$ ${amount}: ${options[0]}. Podemos fechar?`;
+      return `${debtor.name}, ${promiseCtx}ainda podemos resolver a dívida total de R$ ${totalFmt}: ${options[0]}. Podemos fechar?`;
     }
-    return `${debtor.name}, ${promiseCtx}temos duas opções para a dívida de R$ ${amount}: (1) ${options[0]}; ou (2) ${options[1]}. Qual prefere?`;
+    return `${debtor.name}, ${promiseCtx}temos duas opções para a dívida total de R$ ${totalFmt}: (1) ${options[0]}; ou (2) ${options[1]}. Qual prefere?`;
   },
 };
 
