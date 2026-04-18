@@ -125,11 +125,14 @@ router.post('/', async (req, res) => {
   try { normalizedPhone = normalizePhone(phone); }
   catch (e) { return res.status(400).json({ error: e.message }); }
 
+  // Se há parcelamento, o valor cobrado é o da parcela (total ÷ parcelas)
+  const installmentAmount = +(parsedAmount / parsedInstallments).toFixed(2);
+
   try {
     const [r] = await pool.query(
       `INSERT INTO debtors (company_id, name, phone, amount, due_date, installments)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [req.user.companyId, name.trim(), normalizedPhone, parsedAmount, due_date, parsedInstallments]
+      [req.user.companyId, name.trim(), normalizedPhone, installmentAmount, due_date, parsedInstallments]
     );
     res.json({ id: r.insertId });
   } catch (err) {

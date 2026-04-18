@@ -131,7 +131,7 @@ export default function Upload() {
           <ul style={{ color: 'var(--muted)' }}>
             <li><code>nome</code> — nome do cliente</li>
             <li><code>telefone</code> — WhatsApp com DDD (ex: (11) 91234-5678)</li>
-            <li><code>valor</code> — valor da dívida (ex: 250,00)</li>
+            <li><code>valor</code> — valor <strong>total</strong> da dívida (ex: 250,00). Se houver parcelamento, a cobrança será feita no valor da parcela.</li>
             <li><code>vencimento</code> — data de vencimento (DD/MM/AAAA ou AAAA-MM-DD)</li>
             <li><code>parcelamento</code> — número de parcelas (opcional, padrão 1)</li>
           </ul>
@@ -214,7 +214,7 @@ export default function Upload() {
                 )}
               </div>
               <div className="field">
-                <label>Valor da dívida (R$) *</label>
+                <label>Valor total da dívida (R$) *</label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -244,6 +244,18 @@ export default function Upload() {
                   value={form.installments}
                   onChange={(e) => update('installments', e.target.value)}
                 />
+                {(() => {
+                  const raw = String(form.amount || '').replace(/\./g, '').replace(',', '.');
+                  const totalNum = Number(raw);
+                  const n        = Number(form.installments) || 1;
+                  if (!totalNum || n <= 1) return null;
+                  const parcela = (totalNum / n).toFixed(2).replace('.', ',');
+                  return (
+                    <span style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4, display: 'block' }}>
+                      Cobrança da parcela: R$ {parcela}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 

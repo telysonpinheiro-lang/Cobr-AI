@@ -86,7 +86,9 @@ async function parseDebtorsFile(buffer, originalName) {
     }
     seen.add(phone);
 
-    valid.push({ name, phone, amount, due_date: dueDate, installments });
+    // Se há parcelamento, o valor cobrado é o da parcela (total ÷ parcelas)
+    const installmentAmount = +(amount / installments).toFixed(2);
+    valid.push({ name, phone, amount: installmentAmount, due_date: dueDate, installments });
   });
 
   return { valid, errors };
