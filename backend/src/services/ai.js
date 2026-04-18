@@ -83,7 +83,7 @@ const OPENING_PROMPTS = {
   },
   d1: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2);
-    return `Gere uma mensagem amigável de lembrete de vencimento para ${debtor.name}. A parcela de R$ ${amount} vence hoje. Informe isso de forma cordial e pergunte se precisa de ajuda para regularizar. Não ofereça desconto nem parcelamento.`;
+    return `Gere uma mensagem amigável de lembrete de vencimento para ${debtor.name}. A parcela de R$ ${amount} vence hoje. Use exatamente este formato: "Olá, ${debtor.name}! Passando para te lembrar que a sua parcela no valor de R$ ${amount.replace('.', ',')} vence hoje." seguido de quebra de linha e "Qualquer dúvida estamos a disposição.". Não ofereça desconto nem parcelamento.`;
   },
   d2: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2);
@@ -208,7 +208,7 @@ const FALLBACK_OPENINGS = {
   },
   d1: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2).replace('.', ',');
-    return `Olá, ${debtor.name}! Sua parcela no valor de R$ ${amount} vence hoje. Podemos te ajudar a regularizar agora?`;
+    return `Olá, ${debtor.name}! Passando para te lembrar que a sua parcela no valor de R$ ${amount} vence hoje.\nQualquer dúvida estamos a disposição.`;
   },
   d2: (debtor) => {
     const amount = Number(debtor.amount).toFixed(2).replace('.', ',');
